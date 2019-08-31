@@ -32,8 +32,8 @@ from random import randint
 
 
 
-x0 = 0.0
-y0 = 0.0
+x_robot = 0.0
+y_robot = 0.0
 rot_angle = 0
 qx = 0
 qy = 0
@@ -51,9 +51,9 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 gprime = Point()
-G0 = Point()
 G1 = Point()
 G2 = Point()
+G3 = Point()
 Goal = PoseStamped()
 Start = PoseStamped()
 
@@ -74,9 +74,9 @@ def call_nav(sms):
 
 # callback function for robot's coordinates (MAP FRAME)
 def call_rot(mes):
-    global x0, y0, qx, qy, qz, qw
-    x0 = mes.pose.pose.position.x
-    y0 = mes.pose.pose.position.y
+    global x_robot, y_robot, qx, qy, qz, qw
+    x_robot = mes.pose.pose.position.x
+    y_robot = mes.pose.pose.position.y
     qx = mes.pose.pose.orientation.x
     qy = mes.pose.pose.orientation.y
     qz = mes.pose.pose.orientation.z
@@ -90,8 +90,8 @@ def call_rot(mes):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 # compute likelihood : P(obs|goal) = normalized [e^(-k*obs)] , for all goals
-def compute_like(dist, Angle, m, k):
-    out0 = np.exp(-k * dist) * np.exp(-m * Angle)
+def compute_like(dist, Angle, mu, beta):
+    out0 = np.exp(-beta * dist) * np.exp(-mu * Angle)
     like = out0 / np.sum(out0)
     return like
 
@@ -122,9 +122,9 @@ def run():
     # create tf.TransformListener objects
     listener = tf.TransformListener()
     listenerNAV = tf.TransformListener()
-    listener0 = tf.TransformListener()
     listener1 = tf.TransformListener()
     listener2 = tf.TransformListener()
+    listener3 = tf.TransformListener()
 
 
     # subscribers
@@ -137,8 +137,8 @@ def run():
 
 
     # declare some variables
-    m = 0.1
-    k = 0.3
+    mu = 0.1
+    beta = 0.3
     n = 4   # number of goals
     l = 0.75
     Delta = 0.2
@@ -164,9 +164,9 @@ def run():
 
         offset = -0.5
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
-        g0 = [-2.83128278901, -3.62014215797]
-        g1 = [-0.215494300143, -5.70071558441]
-        g2 = [3.08670737031, -5.93227324436]
+        g1 = [-2.83128278901, -3.62014215797]
+        g2 = [-0.215494300143, -5.70071558441]
+        g3 = [3.08670737031, -5.93227324436]
 
 
 
@@ -181,13 +181,6 @@ def run():
         gprime_msg.point.y = g_prime[1]
 
         # prepare transformation from g0(MAP FRAME) to g0 -> g0_new(ROBOT FRAME)
-        G0_msg = PointStamped()
-        G0_msg.header.frame_id = "map"
-        G0_msg.header.stamp = rospy.Time(0)
-        G0_msg.point.x = g0[0]
-        G0_msg.point.y = g0[1]
-
-        # prepare transformation from g1(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
         G1_msg = PointStamped()
         G1_msg.header.frame_id = "map"
         G1_msg.header.stamp = rospy.Time(0)
@@ -201,15 +194,24 @@ def run():
         G2_msg.point.x = g2[0]
         G2_msg.point.y = g2[1]
 
+        # prepare transformation from g1(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
+        G3_msg = PointStamped()
+        G3_msg.header.frame_id = "map"
+        G3_msg.header.stamp = rospy.Time(0)
+        G3_msg.point.x = g3[0]
+        G3_msg.point.y = g3[1]
+
+
 
 
         try:
 
             (trans, rot) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
-            list_nav = listenerNAV.transformPoint("/base_link", gprime_msg)
-            list = listener0.transformPoint("/base_link", G0_msg)  # transform g0 to base_link (ROBOT FRAME) , returns x,y
-            list1 = listener1.transformPoint("/base_link", G1_msg) # transform g1 to base_link (ROBOT FRAME) , returns x,y
-            list2 = listener2.transformPoint("/base_link", G2_msg) # transform g2 to base_link (ROBOT FRAME) , returns x,y
+            list_nav = listenerNAV.transformPoint("/base_link", gprime_msg)  # transform g_prime to base_link (ROBOT FRAME) , returns x,y
+            list1 = listener1.transformPoint("/base_link", G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
+            list2 = listener2.transformPoint("/base_link", G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
+            list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
+
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
 
@@ -227,9 +229,9 @@ def run():
 
         # declare NEW coordinates' goals after the transformations (ROBOT FRAME)
         g_prime_new = [list_nav.point.x, list_nav.point.y]
-        g0_new = [list.point.x, list.point.y]
         g1_new = [list1.point.x, list1.point.y]
         g2_new = [list2.point.x, list2.point.y]
+        g3_new = [list3.point.x, list3.point.y]
 
 
         # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
@@ -237,14 +239,14 @@ def run():
         # rospy.loginfo("Robot_FRAME: %s", robot)
 
         # robot coordinates (MAP FRAME)
-        robot_coord = [x0, y0]
+        robot_coord = [x_robot, y_robot]
 
         # goals coordinates (MAP FRAME)
-        targets = [g_prime, g0, g1, g2]
+        targets = [g_prime, g1, g2, g3]
 
 
         # goals coordinates (ROBOT FRAME)
-        new_goals = [g_prime_new[0], g_prime_new[1], g0_new[0], g0_new[1], g1_new[0], g1_new[1], g2_new[0], g2_new[1]]
+        new_goals = [g_prime_new[0], g_prime_new[1], g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]]
         new = np.array(new_goals)
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
@@ -280,7 +282,7 @@ def run():
 # -------------------------------------------------- B A Y E S   R U L E ------------------------------------------------------------- #
 
         # BAYES' FILTER
-        likelihood = compute_like(dist, Angle, m, k)
+        likelihood = compute_like(dist, Angle, mu, beta)
         summary = compute_conditional(cond, prior)
         posterior = compute_post(likelihood, summary)
         index = np.argmax(posterior)
