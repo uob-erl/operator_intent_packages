@@ -200,7 +200,6 @@ def run():
 
 
         targets_FIRST = [g_prime, g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-        #targets_SECOND = [g_prime, g4, g9, g11] # list of SECOND set of goals (MAP FRAME) --> useful for euclidean distance
         targets_SECOND = [g_prime, g5, g6, g7] # list of SECOND set of goals (MAP FRAME) --> useful for euclidean distance
 
 
@@ -294,7 +293,6 @@ def run():
         yaw_degrees = yaw * 180 / np.pi
 
 
-
         # NEW coordinates' goals after transformations (ROBOT FRAME)
         g_prime_new = [list_nav.point.x, list_nav.point.y]
         g1_new = [list1.point.x, list1.point.y]
@@ -308,8 +306,6 @@ def run():
         # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
         # robot = [translation[0], translation[1]]
         # rospy.loginfo("Robot_FRAME: %s", robot)
-
-
 
 
         # list of FIRST set of goals (ROBOT FRAME)
@@ -329,7 +325,7 @@ def run():
 
 # -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
 
-        # check euclidean distance(nav-g1) to define the proper set of goals (either 0,1,2 OR 4,9,11)
+        # check euclidean distance(nav-g1) to define the proper set of goals (either 1,2,3 OR 5,6,7)
         check = distance.euclidean(g_prime, g1)
         rospy.loginfo("CHECK: %s", check)
 
@@ -390,7 +386,6 @@ def run():
 
 
         else:
-
 
             rospy.loginfo("status=1")
 
