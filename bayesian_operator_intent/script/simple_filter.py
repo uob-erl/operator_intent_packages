@@ -50,7 +50,7 @@ pitch = 0
 yaw = 0
 delta_yaw = 0
 orientation_list = 0
-gprime = Point()
+Gprime = Point()
 G1 = Point()
 G2 = Point()
 G3 = Point()
@@ -145,15 +145,15 @@ def run():
 
     # Initialize Prior-beliefs according to goals' number
     # nav goal should have higher prior belief at t=0
-    data0 = np.ones(n-1) * (1-l)/(n-1)   # P(gnav)=0.75 , P(g0)= ... , P(g1)= ...
-    prior = data0
+    data_prior = np.ones(n-1) * (1-l)/(n-1)   # P(gnav)=0.75 , P(g0)= ... , P(g1)= ...
+    prior = data_prior
     prior = np.insert(prior, 0, l, axis=0)
 
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
-    data1 = np.ones((n, n)) * (Delta / (n-1))
-    np.fill_diagonal(data1, 1-Delta)
-    cond = data1
+    data_cpt = np.ones((n, n)) * (Delta / (n-1))
+    np.fill_diagonal(data_cpt, 1-Delta)
+    cond = data_cpt
 
 
     rate=rospy.Rate(10)
@@ -162,25 +162,28 @@ def run():
 
     while not rospy.is_shutdown():
 
-        offset = -0.5
+        # robot coordinates (MAP FRAME)
+        robot_coord = [x_robot, y_robot]
+
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
         g1 = [-2.83128278901, -3.62014215797]
         g2 = [-0.215494300143, -5.70071558441]
         g3 = [3.08670737031, -5.93227324436]
 
-
+        # goals coordinates (MAP FRAME)
+        targets = [g_prime, g1, g2, g3]
 
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
         # prepare transformation from g_prime(MAP FRAME) to gprime -> g_prime_new(ROBOT FRAME)
-        gprime_msg = PointStamped()
-        gprime_msg.header.frame_id = "map"
-        gprime_msg.header.stamp = rospy.Time(0)
-        gprime_msg.point.x = g_prime[0]
-        gprime_msg.point.y = g_prime[1]
+        Gprime_msg = PointStamped()
+        Gprime_msg.header.frame_id = "map"
+        Gprime_msg.header.stamp = rospy.Time(0)
+        Gprime_msg.point.x = g_prime[0]
+        Gprime_msg.point.y = g_prime[1]
 
-        # prepare transformation from g0(MAP FRAME) to g0 -> g0_new(ROBOT FRAME)
+        # prepare transformation from g0(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
         G1_msg = PointStamped()
         G1_msg.header.frame_id = "map"
         G1_msg.header.stamp = rospy.Time(0)
@@ -194,7 +197,7 @@ def run():
         G2_msg.point.x = g2[0]
         G2_msg.point.y = g2[1]
 
-        # prepare transformation from g1(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
+        # prepare transformation from g1(MAP FRAME) to g3 -> g3_new(ROBOT FRAME)
         G3_msg = PointStamped()
         G3_msg.header.frame_id = "map"
         G3_msg.header.stamp = rospy.Time(0)
@@ -207,7 +210,7 @@ def run():
         try:
 
             (trans, rot) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
-            list_nav = listenerNAV.transformPoint("/base_link", gprime_msg)  # transform g_prime to base_link (ROBOT FRAME) , returns x,y
+            list_nav = listenerNAV.transformPoint("/base_link", Gprime_msg)  # transform g_prime to base_link (ROBOT FRAME) , returns x,y
             list1 = listener1.transformPoint("/base_link", G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
             list2 = listener2.transformPoint("/base_link", G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
@@ -238,11 +241,7 @@ def run():
         # robot = [trans[0], trans[1]]
         # rospy.loginfo("Robot_FRAME: %s", robot)
 
-        # robot coordinates (MAP FRAME)
-        robot_coord = [x_robot, y_robot]
 
-        # goals coordinates (MAP FRAME)
-        targets = [g_prime, g1, g2, g3]
 
 
         # goals coordinates (ROBOT FRAME)
@@ -265,8 +264,21 @@ def run():
 
         # angles' computation between robot (x=0, y=0) & each goal (2nd Observation)
         robot_base = [0, 0]
+
+        # # if n=3 ..
+        # ind_pos_x = [0, 2, 4]
+        # ind_pos_y = [1, 3, 5]
+
+        # if n=4 ..
         ind_pos_x = [0, 2, 4, 6]
         ind_pos_y = [1, 3, 5, 7]
+
+        # # if n=5 ..
+        # ind_pos_x = [0, 2, 4, 6, 8]
+        # ind_pos_y = [1, 3, 5, 7, 9]
+
+        # and so on ...
+
         dx = new - robot_base[0]
         dy = new - robot_base[1]
         Dx = dx[ind_pos_x]
