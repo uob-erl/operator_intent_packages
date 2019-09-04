@@ -167,7 +167,7 @@ def run():
 
 
     # Initialize Prior-beliefs according to goals' number .. nav goal should have higher prior belief at t=0
-    data_prior = np.ones(n-1) * (1-l)/(n-1)   # P(gnav)=0.75 , P(g0)= ... , P(g1)= ...
+    data_prior = np.ones(n-1) * (1-l)/(n-1)   # P(g_prime)=0.75 , P(g1)= ... , P(g2)= ...
     prior = data_prior
     prior = np.insert(prior, 0, l, axis=0)
 
@@ -225,42 +225,42 @@ def run():
         Gprime_msg.point.x = g_prime[0]
         Gprime_msg.point.y = g_prime[1]
 
-        # prepare transformation from g0(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
+        # prepare transformation from g1(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
         G1_msg = PointStamped()
         G1_msg.header.frame_id = "map"
         G1_msg.header.stamp = rospy.Time(0)
         G1_msg.point.x = g1[0]
         G1_msg.point.y = g1[1]
 
-        # prepare transformation from g1(MAP FRAME) to g2 -> g2_new(ROBOT FRAME)
+        # prepare transformation from g2(MAP FRAME) to g2 -> g2_new(ROBOT FRAME)
         G2_msg = PointStamped()
         G2_msg.header.frame_id = "map"
         G2_msg.header.stamp = rospy.Time(0)
         G2_msg.point.x = g2[0]
         G2_msg.point.y = g2[1]
 
-        # prepare transformation from g2(MAP FRAME) to g3 -> g3_new(ROBOT FRAME)
+        # prepare transformation from g3(MAP FRAME) to g3 -> g3_new(ROBOT FRAME)
         G3_msg = PointStamped()
         G3_msg.header.frame_id = "map"
         G3_msg.header.stamp = rospy.Time(0)
         G3_msg.point.x = g3[0]
         G3_msg.point.y = g3[1]
 
-        # prepare transformation from g2(MAP FRAME) to g5 -> g5_new(ROBOT FRAME)
+        # prepare transformation from g5(MAP FRAME) to g5 -> g5_new(ROBOT FRAME)
         G5_msg = PointStamped()
         G5_msg.header.frame_id = "map"
         G5_msg.header.stamp = rospy.Time(0)
         G5_msg.point.x = g5[0]
         G5_msg.point.y = g5[1]
 
-        # prepare transformation from g2(MAP FRAME) to g6 -> g6_new(ROBOT FRAME)
+        # prepare transformation from g6(MAP FRAME) to g6 -> g6_new(ROBOT FRAME)
         G6_msg = PointStamped()
         G6_msg.header.frame_id = "map"
         G6_msg.header.stamp = rospy.Time(0)
         G6_msg.point.x = g6[0]
         G6_msg.point.y = g6[1]
 
-        # prepare transformation from g2(MAP FRAME) to g7 -> g7_new(ROBOT FRAME)
+        # prepare transformation from g7(MAP FRAME) to g7 -> g7_new(ROBOT FRAME)
         G7_msg = PointStamped()
         G7_msg.header.frame_id = "map"
         G7_msg.header.stamp = rospy.Time(0)
