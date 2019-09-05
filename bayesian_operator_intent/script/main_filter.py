@@ -3,7 +3,8 @@
 
 
 # main filter -- bayesian estimation with 2 observations ( 3 in total --> 2 after combining)
-
+# OBS : euclidean distance -- angle -- path length
+# Simulated environment : husky_gazebo_intent.launch
 
 import rospy
 import numpy as np
@@ -27,6 +28,20 @@ from sensor_msgs.msg import LaserScan
 from random import randint
 
 
+# GOALS
+# g1 = [-2.83128278901, -3.62014215797]
+# g2 = [-0.215494300143, -5.70071558441]
+# g3 = [3.08670737031, -5.93227324436]
+# g4 = [6.94527384787, -11.717640655]
+# g5 = [8.51079199583, 4.698199058]
+# g6 = [9.00735322774, -0.677194482712]
+# g7 = [11.8716085357, -0.506166845716]
+# g8 = [14.9899956087, 5.20262059311]
+# g9 = [20.101826819, -8.62395824827]
+# g10 = [22.9649931871, 10.4371948525]
+# g11 = [25.5818735158, 15.74648043]
+# g12 = [27.8554619121, 6.78231736479]
+
 
 
 x_robot = 0.0
@@ -48,13 +63,18 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
-Gprime = Point()
+Gprime = Point() # operator's nav goal
+
+# FIRST set of goals
 G1 = Point()
 G2 = Point()
 G3 = Point()
+
+# SECOND set of goals
 G5 = Point()
 G6 = Point()
 G7 = Point()
+
 Goal = PoseStamped()
 Start = PoseStamped()
 
@@ -64,25 +84,25 @@ Start = PoseStamped()
 # -------------------------------------------------- C A L L B A C K S --------------------------------------------------------------- #
 
 # callback function for navigational goal (g')
-def call_nav(sms):
+def call_nav(msg):
     global x_nav, y_nav, qx_nav, qy_nav, qz_nav, qw_nav
-    x_nav = sms.pose.position.x
-    y_nav = sms.pose.position.y
-    qx_nav = sms.pose.orientation.x
-    qy_nav = sms.pose.orientation.y
-    qz_nav = sms.pose.orientation.z
-    qw_nav = sms.pose.orientation.w
+    x_nav = msg.pose.position.x
+    y_nav = msg.pose.position.y
+    qx_nav = msg.pose.orientation.x
+    qy_nav = msg.pose.orientation.y
+    qz_nav = msg.pose.orientation.z
+    qw_nav = msg.pose.orientation.w
 
 
 # callback function for robot's coordinates (MAP FRAME)
-def call_rot(mes):
+def call_rot(message):
     global x_robot, y_robot, qx, qy, qz, qw
-    x_robot = mes.pose.pose.position.x
-    y_robot = mes.pose.pose.position.y
-    qx = mes.pose.pose.orientation.x
-    qy = mes.pose.pose.orientation.y
-    qz = mes.pose.pose.orientation.z
-    qw = mes.pose.pose.orientation.w
+    x_robot = message.pose.pose.position.x
+    y_robot = message.pose.pose.position.y
+    qx = message.pose.pose.orientation.x
+    qy = message.pose.pose.orientation.y
+    qz = message.pose.pose.orientation.z
+    qw = message.pose.pose.orientation.w
 
 
 # callback function for evaluating path length of each goal
@@ -112,15 +132,15 @@ def compute_like(dist, Angle, beta, mu):
 
 
 # compute conditional : normalized [Sum P(goal.t|goal.t-1) * b(goal.t-1)] .. "ACTION model"
-def compute_conditional(cond, prior):
+def compute_cond(cond, prior):
     out1 =  np.matmul(cond, prior.T)
     sum = out1 / np.sum(out1)
     return sum
 
 
 # compute posterior P(goal|obs) = normalized(likelihood * conditional)
-def compute_post(likelihood, summary):
-    out2 = likelihood * summary
+def compute_post(likelihood, conditional):
+    out2 = likelihood * conditional
     post = out2 / np.sum(out2)
     return post
 
@@ -189,6 +209,7 @@ def run():
 
         # goals coordinates (MAP FRAME)
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
+
         g1 = [-2.83128278901, -3.62014215797]
         g2 = [-0.215494300143, -5.70071558441]
         g3 = [3.08670737031, -5.93227324436]
@@ -392,7 +413,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.02) # 0.02 x 4 = 0.08 sec
+                rospy.sleep(0.04) # 0.02 x 4 = 0.08 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -458,7 +479,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.02) # 0.02 x 4 = 0.08 sec
+                rospy.sleep(0.04) # 0.04 x 4 = 0.16 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -478,7 +499,7 @@ def run():
         result = any(q > value for q in diff)
         if result:
             rospy.loginfo("yes - BAYES with diff & angle") # bayes me gwnia k path
-            dist = diff
+            dist = path #diff
             #beta = 0.3
             #mu = 0.1
         else:
@@ -496,8 +517,8 @@ def run():
 
         # BAYES' FILTER
         likelihood = compute_like(dist, Angle, beta, mu)
-        summary = compute_conditional(cond, prior)
-        posterior = compute_post(likelihood, summary)
+        conditional = compute_cond(cond, prior)
+        posterior = compute_post(likelihood, conditional)
         index = np.argmax(posterior)
         prior = posterior
 
