@@ -176,6 +176,7 @@ def run():
 
     # Publishers
     pub = rospy.Publisher('possible_goal', Float32, queue_size=1)
+    output = rospy.Publisher('exploration', Float32, queue_size=1)
 
 
     # declare variables
@@ -413,7 +414,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.04) # 0.02 x 4 = 0.08 sec
+                rospy.sleep(0.04) # 0.04 x 4 = 0.16 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -527,6 +528,28 @@ def run():
 
 
 
+# -------------------------------------------------- ? EXPLORE ? --------------------------------------------------------------- #
+
+        # 1st way
+        zeta = any(z > posterior[0] for z in posterior)
+        if zeta:
+            decision = 1   # published in 'exploration' topic
+            #print('Exploring ON')
+        else:
+            decision = 0   # published in 'exploration' topic
+            #print('Exploring OFF')
+
+        # 2nd way (much easier - less demanding)
+        # if index != 0:
+        #     decision = 1
+        #     #print('Explore')
+        # else:
+        #     decision = 0
+        #     #print('NO Explore')
+
+# -------------------------------------------------- ? EXPLORE ? --------------------------------------------------------------- #
+
+
         # print ...
         rospy.loginfo("rotate: %s", yaw_degrees)
         rospy.loginfo("len: %s", path)
@@ -540,6 +563,10 @@ def run():
 
 
         pub.publish(index)
+        output.publish(decision)
+
+
+
 
 
         rate.sleep()
