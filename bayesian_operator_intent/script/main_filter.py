@@ -53,6 +53,16 @@ from random import randint
 # g7 = [14.0166165337, -17.3396834537]
 
 
+# g1 = [20.9835529327, 11.3141422272]
+# g2 = [33.935836792, 9.45084857941]
+# g3 = [13.5039768219, -10.5052185059]
+# g4 = [12.3510360718, -16.0753192902]
+
+
+
+
+
+
 
 
 
@@ -75,17 +85,20 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
+
 Gprime = Point() # operator's nav goal
 
 # FIRST set of goals
 G1 = Point()
 G2 = Point()
-G3 = Point()
 
 # SECOND set of goals
-G5 = Point()
-G6 = Point()
-G7 = Point()
+G3 = Point()
+G4 = Point()
+
+# G5 = Point()
+# G6 = Point()
+# G7 = Point()
 
 Goal = PoseStamped()
 Start = PoseStamped()
@@ -175,9 +188,9 @@ def run():
     listener1 = tf.TransformListener()
     listener2 = tf.TransformListener()
     listener3 = tf.TransformListener()
-    listener5 = tf.TransformListener()
-    listener6 = tf.TransformListener()
-    listener7 = tf.TransformListener()
+    listener4 = tf.TransformListener()
+    #listener6 = tf.TransformListener()
+    #listener7 = tf.TransformListener()
 
 
     # Subscribers
@@ -188,13 +201,13 @@ def run():
 
     # Publishers
     pub = rospy.Publisher('possible_goal', Float32, queue_size=1)
-    output = rospy.Publisher('exploration', Float32, queue_size=1)
+    output = rospy.Publisher('operator_intent', Float32, queue_size=1)
 
 
     # declare variables
     beta = 0.3
     mu = 0.1
-    n = 4   # number of total goals (prime+subgoals)
+    n = 3   # number of total goals (prime+subgoals)
     l = 0.75
     Delta = 0.2
 
@@ -227,40 +240,42 @@ def run():
         # g2 = [-0.215494300143, -5.70071558441]
         # g3 = [3.08670737031, -5.93227324436]
 
-        g1 = [26.3881398852, 4.61473413202]
-        g2 = [33.8613474409, 10.5505155549]
-        g3 = [21.0450027602, 11.8806306106]
+        g1 = [20.9835529327, 11.3141422272]
+        g2 = [33.935836792, 9.45084857941]
 
-        g5 = [18.0152954346, -13.769242483]
-        g6 = [12.1903952998, -11.1189322827]
-        g7 = [14.0166165337, -17.3396834537]
+        g3 = [13.5039768219, -10.5052185059]
+        g4 = [12.3510360718, -16.0753192902]
+
+
 
         # g5 = [8.51079199583, 4.698199058]
         # g6 = [9.00735322774, -0.677194482712]
         # g7 = [11.8716085357, -0.506166845716]
 
 
-        targets_FIRST = [g_prime, g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-        targets_SECOND = [g_prime, g5, g6, g7] # list of SECOND set of goals (MAP FRAME) --> useful for euclidean distance
+        targets_FIRST = [g_prime, g1, g2] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
+        targets_SECOND = [g_prime, g3, g4] # list of SECOND set of goals (MAP FRAME) --> useful for euclidean distance
+
+
 
 
         # FIRST set with offset --> useful for GetPlan
         # g1_off = [-2.66417694092, -3.15912365913]
         # g2_off = [-0.00289916992188, -5.19672012329]
         # g3_off = [3.34997367859, -5.3837480545]
-        g1_off = [26.455745697, 5.01796913147]
-        g2_off = [34.3937149048, 9.34378051758]
-        g3_off = [21.0932292938, 11.3432970047]
-        targets_FIRST_off = [g_prime, g1_off, g2_off, g3_off]
+        g1_off = [21.0046730042, 11.751698494]
+        g2_off = [33.9431762695, 9.90261650085]
+
+        targets_FIRST_off = [g_prime, g1_off, g2_off]
 
         # SECOND set with offset --> useful for GetPlan
         # g5_off = [8.15270709991, 4.42381906509]
         # g6_off = [8.75923633575, -0.319195270538]
         # g7_off = [11.8463191986, -0.120270967484]
-        g5_off = [17.448348999, -13.7549819946]
-        g6_off = [12.1414794922, -10.8036384583]
-        g7_off = [14.0694599152, -17.5114212036]
-        targets_SECOND_off = [g_prime, g5_off, g6_off, g7_off]
+        g3_off = [13.0466022491, -10.525103569]
+        g4_off = [12.5871200562, -16.5315208435]
+
+        targets_SECOND_off = [g_prime, g3_off, g4_off]
 
 
 
@@ -295,25 +310,25 @@ def run():
         G3_msg.point.y = g3[1]
 
         # prepare transformation from g5(MAP FRAME) to g5 -> g5_new(ROBOT FRAME)
-        G5_msg = PointStamped()
-        G5_msg.header.frame_id = "map"
-        G5_msg.header.stamp = rospy.Time(0)
-        G5_msg.point.x = g5[0]
-        G5_msg.point.y = g5[1]
+        G4_msg = PointStamped()
+        G4_msg.header.frame_id = "map"
+        G4_msg.header.stamp = rospy.Time(0)
+        G4_msg.point.x = g4[0]
+        G4_msg.point.y = g4[1]
 
-        # prepare transformation from g6(MAP FRAME) to g6 -> g6_new(ROBOT FRAME)
-        G6_msg = PointStamped()
-        G6_msg.header.frame_id = "map"
-        G6_msg.header.stamp = rospy.Time(0)
-        G6_msg.point.x = g6[0]
-        G6_msg.point.y = g6[1]
-
-        # prepare transformation from g7(MAP FRAME) to g7 -> g7_new(ROBOT FRAME)
-        G7_msg = PointStamped()
-        G7_msg.header.frame_id = "map"
-        G7_msg.header.stamp = rospy.Time(0)
-        G7_msg.point.x = g7[0]
-        G7_msg.point.y = g7[1]
+        # # prepare transformation from g6(MAP FRAME) to g6 -> g6_new(ROBOT FRAME)
+        # G6_msg = PointStamped()
+        # G6_msg.header.frame_id = "map"
+        # G6_msg.header.stamp = rospy.Time(0)
+        # G6_msg.point.x = g6[0]
+        # G6_msg.point.y = g6[1]
+        #
+        # # prepare transformation from g7(MAP FRAME) to g7 -> g7_new(ROBOT FRAME)
+        # G7_msg = PointStamped()
+        # G7_msg.header.frame_id = "map"
+        # G7_msg.header.stamp = rospy.Time(0)
+        # G7_msg.point.x = g7[0]
+        # G7_msg.point.y = g7[1]
 
 
         try:
@@ -323,9 +338,9 @@ def run():
             list1 = listener1.transformPoint("/base_link", G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
             list2 = listener2.transformPoint("/base_link", G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
-            list5 = listener5.transformPoint("/base_link", G5_msg)  # transform g5 to base_link (ROBOT FRAME) , returns x,y
-            list6 = listener6.transformPoint("/base_link", G6_msg)  # transform g6 to base_link (ROBOT FRAME) , returns x,y
-            list7 = listener7.transformPoint("/base_link", G7_msg)  # transform g7 to base_link (ROBOT FRAME) , returns x,y
+            list4 = listener4.transformPoint("/base_link", G4_msg)  # transform g4 to base_link (ROBOT FRAME) , returns x,y
+            # list6 = listener6.transformPoint("/base_link", G6_msg)  # transform g6 to base_link (ROBOT FRAME) , returns x,y
+            # list7 = listener7.transformPoint("/base_link", G7_msg)  # transform g7 to base_link (ROBOT FRAME) , returns x,y
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
 
@@ -345,9 +360,9 @@ def run():
         g1_new = [list1.point.x, list1.point.y]
         g2_new = [list2.point.x, list2.point.y]
         g3_new = [list3.point.x, list3.point.y]
-        g5_new = [list5.point.x, list5.point.y]
-        g6_new = [list6.point.x, list6.point.y]
-        g7_new = [list7.point.x, list7.point.y]
+        g4_new = [list4.point.x, list4.point.y]
+        # g6_new = [list6.point.x, list6.point.y]
+        # g7_new = [list7.point.x, list7.point.y]
 
 
         # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
@@ -356,11 +371,11 @@ def run():
 
 
         # list of FIRST set of goals (ROBOT FRAME)
-        new_goals_FIRST = [g_prime_new[0], g_prime_new[1], g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
+        new_goals_FIRST = [g_prime_new[0], g_prime_new[1], g1_new[0], g1_new[1], g2_new[0], g2_new[1]] # list
         new_FIRST = np.array(new_goals_FIRST) # array --> useful for angle computation
 
         # # list of SECOND set of goals (ROBOT FRAME)
-        new_goals_SECOND = [g_prime_new[0], g_prime_new[1], g5_new[0], g5_new[1], g6_new[0], g6_new[1], g7_new[0], g7_new[1]] # list
+        new_goals_SECOND = [g_prime_new[0], g_prime_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1]] # list
         new_SECOND = np.array(new_goals_SECOND) # array --> useful for angle computation
 
 
@@ -395,13 +410,13 @@ def run():
             # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
             robot_base = [0, 0]
 
-            # # if n=3 ..
-            # ind_pos_x = [0, 2, 4]
-            # ind_pos_y = [1, 3, 5]
+            # if n=3 ..
+            ind_pos_x = [0, 2, 4]
+            ind_pos_y = [1, 3, 5]
 
-            # if n=4 ..
-            ind_pos_x = [0, 2, 4, 6]
-            ind_pos_y = [1, 3, 5, 7]
+            # # if n=4 ..
+            # ind_pos_x = [0, 2, 4, 6]
+            # ind_pos_y = [1, 3, 5, 7]
 
             # # if n=5 ..
             # ind_pos_x = [0, 2, 4, 6, 8]
@@ -440,7 +455,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.04) # 0.04 x 4 = 0.16 sec
+                rospy.sleep(0.04) # 0.04 x 3 = 0.12 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -461,13 +476,14 @@ def run():
 
             # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
             robot_base = [0, 0]
-            # # if n=3 ..
-            # ind_pos_x = [0, 2, 4]
-            # ind_pos_y = [1, 3, 5]
 
-            # if n=4 ..
-            ind_pos_x = [0, 2, 4, 6]
-            ind_pos_y = [1, 3, 5, 7]
+            # if n=3 ..
+            ind_pos_x = [0, 2, 4]
+            ind_pos_y = [1, 3, 5]
+
+            # # if n=4 ..
+            # ind_pos_x = [0, 2, 4, 6]
+            # ind_pos_y = [1, 3, 5, 7]
 
             # # if n=5 ..
             # ind_pos_x = [0, 2, 4, 6, 8]
@@ -506,7 +522,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.04) # 0.04 x 4 = 0.16 sec
+                rospy.sleep(0.04) # 0.04 x 3 = 0.12 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -557,21 +573,21 @@ def run():
 # -------------------------------------------------- ? EXPLORE ? --------------------------------------------------------------- #
 
         # 1st way
-        zeta = any(z > posterior[0] for z in posterior)
-        if zeta:
-            decision = 1   # published in 'exploration' topic
-            #print('Exploring ON')
-        else:
-            decision = 0   # published in 'exploration' topic
-            #print('Exploring OFF')
-
-        # 2nd way (much easier - less demanding)
-        # if index != 0:
-        #     decision = 1
-        #     #print('Explore')
+        # zeta = any(z > posterior[0] for z in posterior)
+        # if zeta:
+        #     decision = 1   # published in 'exploration' topic
+        #     #print('Exploring ON')
         # else:
-        #     decision = 0
-        #     #print('NO Explore')
+        #     decision = 0   # published in 'exploration' topic
+        #     #print('Exploring OFF')
+
+        #2nd way (much easier - less demanding)
+        if index != 0:
+            decision = 1
+            #print('Explore')
+        else:
+            decision = 0
+            #print('NO Explore')
 
 # -------------------------------------------------- ? EXPLORE ? --------------------------------------------------------------- #
 
@@ -580,6 +596,7 @@ def run():
         rospy.loginfo("rotate: %s", yaw_degrees)
         rospy.loginfo("len: %s", path)
         rospy.loginfo("OPERATOR_goal: %s", g_prime)
+        rospy.loginfo("VALUE: %s", value)
         rospy.loginfo("Difference: %s", diff)
         rospy.loginfo("Angles: %s", Angle)
         rospy.loginfo("Posterior: %s", posterior)
