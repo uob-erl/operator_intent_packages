@@ -20,7 +20,7 @@ from nav_msgs.srv import GetPlan
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Int32, Float32
+from std_msgs.msg import Int32, Float32, Int8
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
@@ -85,6 +85,7 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
+
 
 Gprime = Point() # operator's nav goal
 
@@ -201,7 +202,7 @@ def run():
 
     # Publishers
     pub = rospy.Publisher('possible_goal', Float32, queue_size=1)
-    output = rospy.Publisher('operator_intent', Float32, queue_size=1)
+    output = rospy.Publisher('operator_intent', Int8, queue_size=1)
 
 
     # declare variables
@@ -583,7 +584,7 @@ def run():
 
         #2nd way (much easier - less demanding)
         if index != 0:
-            decision = 1
+            decision= 1
             #print('Explore')
         else:
             decision = 0
