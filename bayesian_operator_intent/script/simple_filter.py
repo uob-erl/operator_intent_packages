@@ -21,7 +21,7 @@ from nav_msgs.srv import GetPlan
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Int32, Float32
+from std_msgs.msg import Int32, Float32, Int8
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
@@ -125,11 +125,12 @@ def compute_post(likelihood, conditional):
 
 
 
-
 def run():
 
-    rospy.init_node('bayesian_filter')
 
+
+
+    rospy.init_node('bayesian_filter')
 
     # create tf.TransformListener objects
     listener = tf.TransformListener()
@@ -137,6 +138,8 @@ def run():
     listener1 = tf.TransformListener()
     listener2 = tf.TransformListener()
     listener3 = tf.TransformListener()
+
+
 
 
     # subscribers
@@ -168,11 +171,15 @@ def run():
     cond = data_cpt
 
 
-    rate = rospy.Rate(10)
+    rate = rospy.Rate(5)
 
 
 
     while not rospy.is_shutdown():
+
+
+
+
 
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
