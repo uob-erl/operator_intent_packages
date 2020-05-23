@@ -55,6 +55,11 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
+checkA = 0
+checkB = 0
+state = 0
+
+
 
 
 Gprime = Point() # operator's nav goal
@@ -168,9 +173,10 @@ def run():
 
 
     # Publishers
-    pub = rospy.Publisher('possible_goal', Float32, queue_size=1)
-    output = rospy.Publisher('operator_intent', Int8, queue_size=1)
-    stoxos = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=5)
+    pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
+    output = rospy.Publisher('operator_intent', Int8, queue_size = 1)
+    area = rospy.Publisher('current_area', Int8, queue_size = 1)
+    #stoxos = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=5)
 
 
     # declare variables for first BAYES
@@ -207,13 +213,17 @@ def run():
         # goals coordinates (MAP FRAME)
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
 
+        g_refA = [26.4987888336, 7.16181945801]
+        g_refB = [17.3956737518, -12.9359521866]
 
 
-        g1 = [20.9835529327, 11.3141422272]
-        g2 = [33.935836792, 9.45084857941]
+        g1 = [20.9167137146, 12.6046304703]
+        g2 = [33.3691520691, 11.5497436523]
 
-        g3 = [13.5039768219, -10.5052185059]
-        g4 = [12.3510360718, -16.0753192902]
+
+
+        g3 = [12.8780117035, -10.7926425934]
+        g4 = [14.0271482468, -17.25157547]
 
 
 
@@ -228,20 +238,23 @@ def run():
 
 
 
-        # FIRST set with offset --> useful for GetPlan
-        g1_off = [21.0046730042, 11.751698494]
-        g2_off = [33.9431762695, 9.90261650085]
-
-        targets_A_off = [g_prime, g1_off, g2_off]
-        targets_A_off_2 = [g1_off, g2_off]
-
-
-        # SECOND set with offset --> useful for GetPlan
-        g3_off = [13.0466022491, -10.525103569]
-        g4_off = [12.5871200562, -16.5315208435]
-
-        targets_B_off = [g_prime, g3_off, g4_off]
-        targets_B_off_2 = [g3_off, g4_off]
+        # # FIRST set with offset --> useful for GetPlan
+        #
+        # g1_off = [20.983089447021484, 12.749549865722656]
+        # g2_off = [33.75846862792969, 10.814520835876465]
+        # # g1_off = [21.0046730042, 11.751698494]
+        # # g2_off = [33.9431762695, 9.90261650085]
+        #
+        # targets_A_off = [g_prime, g1_off, g2_off]
+        # targets_A_off_2 = [g1_off, g2_off]
+        #
+        #
+        # # SECOND set with offset --> useful for GetPlan
+        # g3_off = [13.0466022491, -10.525103569]
+        # g4_off = [12.5871200562, -16.5315208435]
+        #
+        # targets_B_off = [g_prime, g3_off, g4_off]
+        # targets_B_off_2 = [g3_off, g4_off]
 
 
 
@@ -348,12 +361,17 @@ def run():
 
         # check euclidean distance(nav-g1) to define the proper set of goals (either 1,2,3 OR 5,6,7)
         # WE CAN ADD MORE HERE !!!
-        check = distance.euclidean(g_prime, g1)
-        rospy.loginfo("CHECK: %s", check)
+        checkA = distance.euclidean(g_prime, g_refA) #allagi g1 se g_refA
+        rospy.loginfo("CheckA: %s", checkA)
+
+        checkB = distance.euclidean(g_prime, g_refB)
+        rospy.loginfo("CheckB: %s", checkB)
 
 
-
-        if check < 12: # area A
+        if checkA < 8 and checkB > 15: # area A
+        # edw tha mpei if pou tha dilwnei tin ekkinisi tou filter
+        #if check < 12: # area A
+            state = 1 # area A = area 1
             rospy.loginfo("area A")
             if index == 0 and current == g_prime:
 
@@ -405,7 +423,7 @@ def run():
 
                 # generate plan towards goals --> n-path lengths .. (3rd Observation)
                 length = np.array([])
-                for j in targets_A_off:
+                for j in targets_A:
 
                     Start = PoseStamped()
                     Start.header.seq = 0
@@ -426,7 +444,7 @@ def run():
                     srv.goal = Goal
                     srv.tolerance = 0.5
                     resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                    rospy.sleep(0.06) # 0.06 x 3 = 0.18 sec
+                    rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
 
                     length = np.append(length, path_length)
                 path = length
@@ -465,8 +483,9 @@ def run():
                 rospy.loginfo("Posterior: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index)
 
-                pub.publish(index)
-                output.publish(decision)
+                # pub.publish(index)
+                # output.publish(decision)
+
 
             elif index != 0 and current == g_prime:
 
@@ -516,7 +535,7 @@ def run():
 
                 # generate plan towards goals --> n-path lengths .. (3rd Observation)
                 length = np.array([])
-                for j in targets_A_off_2:
+                for j in targets_A_2:
 
                     Start = PoseStamped()
                     Start.header.seq = 0
@@ -577,9 +596,10 @@ def run():
                 rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("Posterior: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index)
+                #
+                # pub.publish(index)
+                # output.publish(decision)
 
-                pub.publish(index)
-                output.publish(decision)
 
             else:
                 rospy.loginfo("ELSE") # EXPLORE OFF
@@ -589,8 +609,12 @@ def run():
 
 
 
+        #else:   # area B
 
-        else:   # area B
+        elif checkA > 15 and checkB < 8:   # area B
+
+            # edw to allo if opws panw
+            state = 2 # area B = area 2
             rospy.loginfo("area B")
             if index == 0 and current == g_prime:
 
@@ -642,7 +666,7 @@ def run():
 
                 # generate plan towards goals --> n-path lengths .. (3rd Observation)
                 length = np.array([])
-                for j in targets_B_off:
+                for j in targets_B:
 
                     Start = PoseStamped()
                     Start.header.seq = 0
@@ -663,7 +687,7 @@ def run():
                     srv.goal = Goal
                     srv.tolerance = 0.5
                     resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                    rospy.sleep(0.06) # 0.06 x 3 = 0.18 sec
+                    rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
 
                     length = np.append(length, path_length)
                 path = length
@@ -701,9 +725,9 @@ def run():
                 rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("Posterior: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index)
-
-                pub.publish(index)
-                output.publish(decision)
+                #
+                # pub.publish(index)
+                # output.publish(decision)
 
             elif index != 0 and current == g_prime:
 
@@ -753,7 +777,7 @@ def run():
 
                 # generate plan towards goals --> n-path lengths .. (3rd Observation)
                 length = np.array([])
-                for j in targets_B_off_2:
+                for j in targets_B_2:
 
                     Start = PoseStamped()
                     Start.header.seq = 0
@@ -815,8 +839,8 @@ def run():
                 rospy.loginfo("Posterior: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index)
 
-                pub.publish(index)
-                output.publish(decision)
+
+
 
             else:
                 rospy.loginfo("ELSE") # EXPLORE OFF
@@ -825,9 +849,24 @@ def run():
                 current = g_prime
 
 
+        elif checkA + checkB > 25: # area C - end
+            state = 3 # area C = area 3
+            rospy.loginfo("moving towards END") # EXPLORE OFF
+            decision = 0
 
 
+        # rospy.loginfo("rotate: %s", yaw_degrees)
+        # rospy.loginfo("len: %s", path)
+        # rospy.loginfo("OPERATOR_goal: %s", g_prime)
+        # rospy.loginfo("VALUE: %s", value)
+        # rospy.loginfo("Difference: %s", diff)
+        # rospy.loginfo("Angles: %s", Angle)
+        # rospy.loginfo("Posterior: %s", posterior)
+        # rospy.loginfo("Potential Goal is %s", index)
 
+        pub.publish(index)
+        area.publish(state)
+        output.publish(decision)
 
 
         rate.sleep()
