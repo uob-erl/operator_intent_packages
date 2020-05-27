@@ -36,6 +36,24 @@ from random import randint
 # g4 = [12.3510360718, -16.0753192902]
 
 
+g1 = [18.4734783173, -0.299915790558]
+
+g2 = [22.5236606598, -2.63952469826]
+
+
+g3 = [29.0113964081, -0.833422660828]
+
+
+g4 = [26.8627986908, -6.38541555405]
+
+
+g5 = [23.6445789337, -8.47383022308]
+
+
+g6 =[19.8492908478, -7.68519210815]
+
+
+
 x_robot = 0.0
 y_robot = 0.0
 rot_angle = 0
@@ -123,28 +141,14 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 # compute likelihood : P(obs|goal) = normalized [e^(-k*obs)] , for all goals .. "SENSOR model"
-def compute_like(Angle, path, w2, w3):
-    #Theta = np.array([1 - dist[0] / np.sum(dist), 1 - dist[1] / np.sum(dist), 1 - dist[2] / np.sum(dist)])
-    Angle = np.array([1 - Angle[0] / np.sum(Angle), 1 - Angle[1] / np.sum(Angle), 1 - Angle[2] / np.sum(Angle)])
-    Path = np.array([1 - path[0] / np.sum(path), 1 - path[1] / np.sum(path), 1 - path[2] / np.sum(path)])
-    #total = np.array([Theta, Angle, Path])
-    total = np.array([Angle, Path])
-
-    pinakas1 = np.array([item[0] for item in total])
-    pinakas2 = np.array([item[1] for item in total])
-    pinakas3 = np.array([item[2] for item in total])
-
-    # f1 = (w1 * pinakas1[0] + w2 * pinakas1[1] + w3 * pinakas1[2]) / (w1+w2+w3)
-    # f2 = (w1 * pinakas2[0] + w2 * pinakas2[1] + w3 * pinakas2[2]) / (w1+w2+w3)
-    # f3 = (w1 * pinakas3[0] + w2 * pinakas3[1] + w3 * pinakas3[2]) / (w1+w2+w3)
-    f1 = (w2 * pinakas1[0] + w3 * pinakas1[1])
-    f2 = (w2 * pinakas2[0] + w3 * pinakas2[1])
-    f3 = (w2 * pinakas3[0] + w3 * pinakas3[1])
-    f = np.array([f1, f2, f3])
-    like = f
-
+def compute_like(path, Angle, wpath, wphi):
+    Path_norm = np.array([(path[0] / np.sum(path)), (path[1] / np.sum(path)), (path[2] / np.sum(path))])
+    Angle_norm = np.array([(Angle[0] / np.sum(Angle)), (Angle[1] / np.sum(Angle)), (Angle[2] / np.sum(Angle))])
+    #print(np.sum(Angle))
+    out0 = (wpath * np.exp(-Path_norm)) * (wphi * np.exp(-Angle_norm))
+    #out0 = np.exp(-wpath * Path_norm) * np.exp(-wphi * Angle_norm)
+    like = out0
     return like
-
 
 # compute conditional : normalized [Sum P(goal.t|goal.t-1) * b(goal.t-1)] .. "ACTION model"
 def compute_cond(cond, prior):
@@ -199,9 +203,9 @@ def run():
     # declare variables for first BAYES
     current = 0
     index = 0
-    #w1 = 0.05
-    w2 = 0.75
-    w3 = 0.25
+    wphi = 0.75
+    wpath = 0.25
+
     n = 3   # number of total goals (prime+subgoals)
     l = 0.7
     Delta = 0.2
@@ -235,6 +239,8 @@ def run():
         g_refB = [17.3956737518, -12.9359521866]
 
 
+        # g1 = [20.983089447021484, 12.749549865722656]
+        # g2 = [33.75846862792969, 10.814520835876465]
         g1 = [20.9167137146, 12.6046304703]
         g2 = [33.3691520691, 11.5497436523]
 
@@ -374,7 +380,6 @@ def run():
 
 
 
-
 # -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
 
         # check euclidean distance(nav-g1) to define the proper set of goals (either 1,2,3 OR 5,6,7)
@@ -469,7 +474,7 @@ def run():
 
 
             # BAYES' FILTER
-            likelihood = compute_like(Angle, path, w2, w3)
+            likelihood = compute_like(path, Angle, wpath, wphi)
             conditional = compute_cond(cond, prior)
             posterior = compute_post(likelihood, conditional)
             index = np.argmax(posterior)
@@ -575,7 +580,7 @@ def run():
 
 
             # BAYES' FILTER
-            likelihood = compute_like(Angle, path, w2, w3)
+            likelihood = compute_like(path, Angle, wpath, wphi)
             conditional = compute_cond(cond, prior)
             posterior = compute_post(likelihood, conditional)
             index = np.argmax(posterior)
