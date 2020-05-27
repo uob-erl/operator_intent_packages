@@ -159,12 +159,15 @@ def run():
 
     # Publishers
     pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
+    poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
+    poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
+    poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
 
 
     # declare variables for first BAYES
     index = 0
-    wphi = 0.75
-    wpath = 0.25
+    wphi = 0.65
+    wpath = 0.35
 
     n = 3   # number of total goals (prime+subgoals)
 
@@ -334,7 +337,6 @@ def run():
         # print ...
         rospy.loginfo("rotate: %s", yaw_degrees)
         rospy.loginfo("len: %s", path)
-        rospy.loginfo("OPERATOR_goal: %s", g_prime)
         rospy.loginfo("Angles: %s", Angle)
         rospy.loginfo("Posterior: %s", posterior)
         rospy.loginfo("Potential Goal is %s", index+1)
@@ -345,6 +347,9 @@ def run():
 
 
         pub.publish(index+1)
+        poster1.publish(posterior[0])
+        poster2.publish(posterior[1])
+        poster3.publish(posterior[2])
 
 
 

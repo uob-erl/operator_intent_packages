@@ -3,6 +3,11 @@
 
 
 
+# simple code -- bayesian estimation with 2 obs
+# OBS : euclidean distance -- angle
+# Simulated environment : husky_gazebo_intent.launch
+# assusmption : All goals are located in front of us. No hidden goals behind walls.
+
 import rospy
 import numpy as np
 import random
@@ -24,7 +29,19 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
 from sensor_msgs.msg import LaserScan
 from random import randint
 
-
+# GOALS
+# g1 = [-2.83128278901, -3.62014215797]
+# g2 = [-0.215494300143, -5.70071558441]
+# g3 = [3.08670737031, -5.93227324436]
+# g4 = [6.94527384787, -11.717640655]
+# g5 = [8.51079199583, 4.698199058]
+# g6 = [9.00735322774, -0.677194482712]
+# g7 = [11.8716085357, -0.506166845716]
+# g8 = [14.9899956087, 5.20262059311]
+# g9 = [20.101826819, -8.62395824827]
+# g10 = [22.9649931871, 10.4371948525]
+# g11 = [25.5818735158, 15.74648043]
+# g12 = [27.8554619121, 6.78231736479]
 
 
 x_robot = 0.0
@@ -45,24 +62,12 @@ pitch = 0
 yaw = 0
 delta_yaw = 0
 orientation_list = 0
-path_length = 0
-checkA = 0
-checkB = 0
-state = 0
-
-
-
-
-# FIRST set of goals
+Gprime = Point()
 G1 = Point()
 G2 = Point()
 G3 = Point()
-
-
 Goal = PoseStamped()
 Start = PoseStamped()
-
-
 
 
 
@@ -89,19 +94,6 @@ def call_rot(message):
     qz = message.pose.pose.orientation.z
     qw = message.pose.pose.orientation.w
 
-
-# callback function for evaluating path length of each goal
-def call(path_msg):
-    global path_length
-    path_length = 0
-    for i in range(len(path_msg.poses) - 1):
-        position_a_x = path_msg.poses[i].pose.position.x
-        position_b_x = path_msg.poses[i+1].pose.position.x
-        position_a_y = path_msg.poses[i].pose.position.y
-        position_b_y = path_msg.poses[i+1].pose.position.y
-
-        path_length += np.sqrt(np.power((position_b_x - position_a_x), 2) + np.power((position_b_y - position_a_y), 2))
-
 # -------------------------------------------------- C A L L B A C K S --------------------------------------------------------------- #
 
 
@@ -109,18 +101,17 @@ def call(path_msg):
 
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
-# compute likelihood
-def compute_like(path, Angle, wpath, wphi):
-    Path_norm = np.array([(path[0] / np.sum(path)), (path[1] / np.sum(path)), (path[2] / np.sum(path))])
-    Angle_norm = np.array([(Angle[0] / np.sum(Angle)), (Angle[1] / np.sum(Angle)), (Angle[2] / np.sum(Angle))])
-    out0 = (wpath * np.exp(-Path_norm)) * (wphi * np.exp(-Angle_norm))
-    like = out0
+# compute likelihood : P(obs|goal) = normalized [e^(-k*obs)] , for all goals
+def compute_like(dist, Angle, mu, beta):
+    out0 = np.exp(-beta * dist) * np.exp(-mu * Angle)
+    like = out0 / np.sum(out0)
     return like
 
-# compute conditional
+
+# compute conditional : normalized [Sum P(goal.t|goal.t-1) * b(goal.t-1)]
 def compute_cond(cond, prior):
     out1 =  np.matmul(cond, prior.T)
-    sum = out1 #/ np.sum(out1)
+    sum = out1 / np.sum(out1)
     return sum
 
 
@@ -134,53 +125,44 @@ def compute_post(likelihood, conditional):
 
 
 
-
 def run():
+
+
+
 
     rospy.init_node('bayesian_filter')
 
-    # Create a callable proxy to GetPlan service
-    get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
-
-
-
     # create tf.TransformListener objects
     listener = tf.TransformListener()
+    listenerNAV = tf.TransformListener()
     listener1 = tf.TransformListener()
     listener2 = tf.TransformListener()
     listener3 = tf.TransformListener()
 
 
 
-    # Subscribers
+
+    # subscribers
     rob_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, call_rot)
     nav_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, call_nav)
-    sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, call)
 
 
-    # Publishers
-    pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
-    poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
-    poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
-    poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
+    # publishers
+    pub = rospy.Publisher('possible_goal', Float32, queue_size=1)
 
 
-    # declare variables for first BAYES
-    index = 0
-    wphi = 0.65
-    wpath = 0.35
-
-    n = 3   # number of total goals (prime+subgoals)
-
+    # declare some variables
+    mu = 0.1
+    beta = 0.3
+    n = 4   # number of goals
+    l = 0.75
     Delta = 0.2
 
-
-
     # Initialize Prior-beliefs according to goals' number
-    data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-    prior = data0
-
-
+    # nav goal should have higher prior belief at t=0
+    data_prior = np.ones(n-1) * (1-l)/(n-1)   # P(g_prime)=0.75 , P(g1)= ... , P(g2)= ...
+    prior = data_prior
+    prior = np.insert(prior, 0, l, axis=0)
 
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
@@ -189,30 +171,45 @@ def run():
     cond = data_cpt
 
 
-    rate = rospy.Rate(4) # 4 Hz (4 loops/sec) .. (0.25 sec)
+    rate = rospy.Rate(5)
+
 
 
     while not rospy.is_shutdown():
 
 
+
+
+
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
-        g1 = [4.60353183746, -13.2964735031] #gleft
-        g2 = [6.86671924591, -9.13561820984] #gcenter
-        g3 = [4.69921255112, -4.81423997879] #gright
 
+        g_prime = [x_nav, y_nav]  # CLICKED point - g'
+        g1 = [-2.83128278901, -3.62014215797]
+        g2 = [-0.215494300143, -5.70071558441]
+        g3 = [3.08670737031, -5.93227324436]
+        # g4 = [6.94527384787, -11.717640655]
+        # g5 = [8.51079199583, 4.698199058]
+        # g6 = [9.00735322774, -0.677194482712]
+        # g7 = [11.8716085357, -0.506166845716]
+        # g8 = [14.9899956087, 5.20262059311]
+        # g9 = [20.101826819, -8.62395824827]
+        # g10 = [22.9649931871, 10.4371948525]
+        # g11 = [25.5818735158, 15.74648043]
+        # g12 = [27.8554619121, 6.78231736479]
 
-
-
-
-        targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-
-
-
+        # goals coordinates (MAP FRAME)
+        targets = [g_prime, g1, g2, g3]
 
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
+        # prepare transformation from g_prime(MAP FRAME) to gprime -> g_prime_new(ROBOT FRAME)
+        Gprime_msg = PointStamped()
+        Gprime_msg.header.frame_id = "map"
+        Gprime_msg.header.stamp = rospy.Time(0)
+        Gprime_msg.point.x = g_prime[0]
+        Gprime_msg.point.y = g_prime[1]
 
         # prepare transformation from g1(MAP FRAME) to g1 -> g1_new(ROBOT FRAME)
         G1_msg = PointStamped()
@@ -238,13 +235,14 @@ def run():
 
 
 
-
         try:
 
-            (translation, rotation) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
+            (trans, rot) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
+            list_nav = listenerNAV.transformPoint("/base_link", Gprime_msg)  # transform g_prime to base_link (ROBOT FRAME) , returns x,y
             list1 = listener1.transformPoint("/base_link", G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
             list2 = listener2.transformPoint("/base_link", G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
+
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
 
@@ -252,46 +250,62 @@ def run():
 
 
         # convert from quaternion to RPY (the yaw of the robot in /map frame)
-        orientation_list = rotation
+        orientation_list = rot
 
         # rotation angle of the robot = yaw in ROBOT FRAME
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
         yaw_degrees = yaw * 180 / np.pi
+        rospy.loginfo("yaw: %s", yaw_degrees)
 
 
-        # NEW coordinates' goals after transformations (ROBOT FRAME)
+        # declare NEW coordinates' goals after the transformations (ROBOT FRAME)
+        g_prime_new = [list_nav.point.x, list_nav.point.y]
         g1_new = [list1.point.x, list1.point.y]
         g2_new = [list2.point.x, list2.point.y]
         g3_new = [list3.point.x, list3.point.y]
 
 
-
-
         # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
-        # robot = [translation[0], translation[1]]
+        # robot = [trans[0], trans[1]]
         # rospy.loginfo("Robot_FRAME: %s", robot)
 
 
-        # list of FIRST set of goals (ROBOT FRAME)
-        new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
-        new = np.array(new_goals) # array --> useful for angle computation
 
+
+        # goals coordinates (ROBOT FRAME)
+        new_goals = [g_prime_new[0], g_prime_new[1], g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]]
+        new = np.array(new_goals)
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
 
 
+
 # -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
 
+        # computation of 'n' Euclidean distances (1st Observation) and store in array (MAP FRAME) -- SAME in all FRAMES
+        measure = np.array([])
+        for p in targets:
+            dist = distance.euclidean(robot_coord, p)
+            measure = np.append(measure, dist)
+        dist = measure
 
-
-        # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
+        # angles' computation between robot (x=0, y=0) & each goal (2nd Observation)
         robot_base = [0, 0]
 
-        # if n=3 ..
-        ind_pos_x = [0, 2, 4]
-        ind_pos_y = [1, 3, 5]
+        # # if n=3 ..
+        # ind_pos_x = [0, 2, 4]
+        # ind_pos_y = [1, 3, 5]
 
+        # if n=4 ..
+        ind_pos_x = [0, 2, 4, 6]
+        ind_pos_y = [1, 3, 5, 7]
+
+        # # if n=5 ..
+        # ind_pos_x = [0, 2, 4, 6, 8]
+        # ind_pos_y = [1, 3, 5, 7, 9]
+
+        # and so on ...
 
         dx = new - robot_base[0]
         dy = new - robot_base[1]
@@ -300,60 +314,35 @@ def run():
         angle = np.arctan2(Dy, Dx) * 180 / np.pi
         Angle = abs(angle)
 
+# -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
 
-        # generate plan towards goals --> n-path lengths .. (3rd Observation)
-        length = np.array([])
-        for j in targets:
 
-            Start = PoseStamped()
-            Start.header.seq = 0
-            Start.header.frame_id = "map"
-            Start.header.stamp = rospy.Time(0)
-            Start.pose.position.x = robot_coord[0]
-            Start.pose.position.y = robot_coord[1]
 
-            Goal = PoseStamped()
-            Goal.header.seq = 0
-            Goal.header.frame_id = "map"
-            Goal.header.stamp = rospy.Time(0)
-            Goal.pose.position.x = j[0]
-            Goal.pose.position.y = j[1]
 
-            srv = GetPlan()
-            srv.start = Start
-            srv.goal = Goal
-            srv.tolerance = 0.5
-            resp = get_plan(srv.start, srv.goal, srv.tolerance)
-            rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
-
-            length = np.append(length, path_length)
-        path = length
-
+# -------------------------------------------------- B A Y E S   R U L E ------------------------------------------------------------- #
 
         # BAYES' FILTER
-        likelihood = compute_like(path, Angle, wpath, wphi)
+        likelihood = compute_like(dist, Angle, mu, beta)
         conditional = compute_cond(cond, prior)
         posterior = compute_post(likelihood, conditional)
         index = np.argmax(posterior)
         prior = posterior
 
+# -------------------------------------------------- B A Y E S   R U L E ------------------------------------------------------------- #
+
+
+
+
         # print ...
-        rospy.loginfo("rotate: %s", yaw_degrees)
-        rospy.loginfo("len: %s", path)
+        rospy.loginfo("NAV_goal: %s", g_prime)
+        rospy.loginfo("Distance: %s", dist)
         rospy.loginfo("Angles: %s", Angle)
         rospy.loginfo("Posterior: %s", posterior)
-        rospy.loginfo("Potential Goal is %s", index+1)
+        rospy.loginfo("Potential Goal is %s", index)
 
 
 
-
-        pub.publish(index+1)
-        poster1.publish(posterior[0])
-        poster2.publish(posterior[1])
-        poster3.publish(posterior[2])
-
-
-
+        pub.publish(index)
 
 
         rate.sleep()
