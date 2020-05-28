@@ -361,6 +361,7 @@ def run():
 
         # check euclidean distance(nav-g1) to define the proper set of goals (either 1,2,3 OR 5,6,7)
         # WE CAN ADD MORE HERE !!!
+<<<<<<< Updated upstream
         checkA = distance.euclidean(g_prime, g_refA) #allagi g1 se g_refA
         rospy.loginfo("CheckA: %s", checkA)
 
@@ -852,6 +853,205 @@ def run():
         elif checkA + checkB > 25: # area C - end
             state = 3 # area C = area 3
             rospy.loginfo("moving towards END") # EXPLORE OFF
+=======
+        check = distance.euclidean(g_prime, g1)
+        rospy.loginfo("CHECK: %s", check)
+
+
+
+        if check < 6:
+
+            rospy.loginfo("status = FIRST SET")
+
+            # computation of 'n' Euclidean distances (1st Observation) and store in array (MAP FRAME) -- SAME in all FRAMES
+            measure = np.array([])
+            for x in targets_FIRST:
+                dist = distance.euclidean(robot_coord, x)
+                measure = np.append(measure, dist)
+            dist = measure
+            rospy.loginfo("Distance: %s", dist)
+
+
+            # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
+            robot_base = [0, 0]
+
+            # if n=3 ..
+            ind_pos_x = [0, 2, 4]
+            ind_pos_y = [1, 3, 5]
+
+            # # if n=4 ..
+            # ind_pos_x = [0, 2, 4, 6]
+            # ind_pos_y = [1, 3, 5, 7]
+
+            # # if n=5 ..
+            # ind_pos_x = [0, 2, 4, 6, 8]
+            # ind_pos_y = [1, 3, 5, 7, 9]
+
+            # and so on ...
+
+            dx = new_FIRST - robot_base[0]
+            dy = new_FIRST - robot_base[1]
+            Dx = dx[ind_pos_x]
+            Dy = dx[ind_pos_y]
+            angle = np.arctan2(Dy, Dx) * 180 / np.pi
+            Angle = abs(angle)
+
+
+            # generate plan towards goals --> n-path lengths .. (3rd Observation)
+            length = np.array([])
+            for j in targets_FIRST_off:
+
+                Start = PoseStamped()
+                Start.header.seq = 0
+                Start.header.frame_id = "map"
+                Start.header.stamp = rospy.Time(0)
+                Start.pose.position.x = robot_coord[0]
+                Start.pose.position.y = robot_coord[1]
+
+                Goal = PoseStamped()
+                Goal.header.seq = 0
+                Goal.header.frame_id = "map"
+                Goal.header.stamp = rospy.Time(0)
+                Goal.pose.position.x = j[0]
+                Goal.pose.position.y = j[1]
+
+                srv = GetPlan()
+                srv.start = Start
+                srv.goal = Goal
+                srv.tolerance = 0.5
+                resp = get_plan(srv.start, srv.goal, srv.tolerance)
+                rospy.sleep(0.04) # 0.04 x 3 = 0.12 sec
+
+                length = np.append(length, path_length)
+            path = length
+
+
+        else:
+
+            rospy.loginfo("status = SECOND SET")
+
+            # computation of 'n' Euclidean distances (1st Observation) and store in array (MAP FRAME) -- SAME in all FRAMES
+            measure = np.array([])
+            for x in targets_SECOND:
+                dist = distance.euclidean(robot_coord, x)
+                measure = np.append(measure, dist)
+            dist = measure
+            rospy.loginfo("Distance: %s", dist)
+
+
+            # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
+            robot_base = [0, 0]
+
+            # if n=3 ..
+            ind_pos_x = [0, 2, 4]
+            ind_pos_y = [1, 3, 5]
+
+            # # if n=4 ..
+            # ind_pos_x = [0, 2, 4, 6]
+            # ind_pos_y = [1, 3, 5, 7]
+
+            # # if n=5 ..
+            # ind_pos_x = [0, 2, 4, 6, 8]
+            # ind_pos_y = [1, 3, 5, 7, 9]
+
+            # and so on ...
+
+            dx = new_SECOND - robot_base[0]
+            dy = new_SECOND - robot_base[1]
+            Dx = dx[ind_pos_x]
+            Dy = dx[ind_pos_y]
+            angle = np.arctan2(Dy, Dx) * 180 / np.pi
+            Angle = abs(angle)
+
+
+            # generate plan towards goals --> n-path lengths .. (3rd Observation)
+            length = np.array([])
+            for j in targets_SECOND_off:
+
+                Start = PoseStamped()
+                Start.header.seq = 0
+                Start.header.frame_id = "map"
+                Start.header.stamp = rospy.Time(0)
+                Start.pose.position.x = robot_coord[0]
+                Start.pose.position.y = robot_coord[1]
+
+                Goal = PoseStamped()
+                Goal.header.seq = 0
+                Goal.header.frame_id = "map"
+                Goal.header.stamp = rospy.Time(0)
+                Goal.pose.position.x = j[0]
+                Goal.pose.position.y = j[1]
+
+                srv = GetPlan()
+                srv.start = Start
+                srv.goal = Goal
+                srv.tolerance = 0.5
+                resp = get_plan(srv.start, srv.goal, srv.tolerance)
+                rospy.sleep(0.04) # 0.04 x 3 = 0.12 sec
+
+                length = np.append(length, path_length)
+            path = length
+
+# -------------------------------------------------- O B S E R V A T I O N S ---------------------------------------------------------- #
+
+
+
+
+# -------------------------------------------------- C H E C K ---------------------------------------------------------- #
+
+        # check the difference between euclidean distance & path length for each goal
+        diff = abs(path - dist)
+
+        value = (0.25 * sum(path)) / n
+
+        result = any(q > value for q in diff)
+        if result:
+            rospy.loginfo("yes - BAYES with diff & angle") # bayes me gwnia k path
+            dist = path #diff
+            #beta = 0.3
+            #mu = 0.1
+        else:
+            rospy.loginfo("no - BAYES with eucl & angle") # bayes me gwnia k dist
+            dist = dist
+            #beta = 0.3
+            #mu = 0.1
+
+# -------------------------------------------------- C H E C K  ---------------------------------------------------------- #
+
+
+
+
+# -------------------------------------------------- B A Y E S'  R U L E --------------------------------------------------------------- #
+
+        # BAYES' FILTER
+        likelihood = compute_like(dist, Angle, beta, mu)
+        conditional = compute_cond(cond, prior)
+        posterior = compute_post(likelihood, conditional)
+        index = np.argmax(posterior)
+        prior = posterior
+
+# -------------------------------------------------- B A Y E S'  R U L E --------------------------------------------------------------- #
+
+
+
+
+# -------------------------------------------------- ? EXPLORE ? --------------------------------------------------------------- #
+
+        # 1st way
+        # zeta = any(z > posterior[0] for z in posterior)
+        # if zeta:
+        #     decision = 1   # published in 'exploration' topic
+        #     #print('Exploring ON')
+        # else:
+        #     decision = 0   # published in 'exploration' topic
+        #     #print('Exploring OFF')
+
+        #2nd way (much easier - less demanding)
+        if index != 0:
+            decision= 1
+            #print('Explore')
+        else:
+>>>>>>> Stashed changes
             decision = 0
 
 

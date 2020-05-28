@@ -179,6 +179,9 @@ def run():
     pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
     output = rospy.Publisher('operator_intent', Int8, queue_size = 1)
     area = rospy.Publisher('current_area', Int8, queue_size = 1)
+    poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
+    poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
+    poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
     #stoxos = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=5)
 
 
@@ -470,6 +473,10 @@ def run():
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index)
 
+            poster1.publish(posterior[0])
+            poster2.publish(posterior[1])
+            poster3.publish(posterior[2])
+
 
 
 
@@ -576,6 +583,10 @@ def run():
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index)
 
+            poster1.publish(posterior[0])
+            poster2.publish(posterior[1])
+            poster3.publish(posterior[2])
+
 
 
 
@@ -589,6 +600,7 @@ def run():
 
         pub.publish(index)
         area.publish(state)
+
         #output.publish(decision)
 
 
