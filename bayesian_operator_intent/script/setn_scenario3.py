@@ -160,6 +160,9 @@ def run():
 
     # Publishers
     pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
+    poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
+    poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
+    poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
 
 
     # declare variables for first BAYES
@@ -346,9 +349,9 @@ def run():
 
 
         pub.publish(index+1)
-        # poster1.publish(posterior[0])
-        # poster2.publish(posterior[1])
-        # poster3.publish(posterior[2])
+        poster1.publish(posterior[0])
+        poster2.publish(posterior[1])
+        poster3.publish(posterior[2])
 
 
 
