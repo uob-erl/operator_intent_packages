@@ -133,22 +133,27 @@ def compute_like(path, Angle, wpath, wphi):
     Angle_norm = np.array([(Angle[0] / np.sum(Angle)), (Angle[1] / np.sum(Angle)), (Angle[2] / np.sum(Angle))])
     out0 = (wpath * np.exp(-Path_norm)) * (wphi * np.exp(-Angle_norm))
     like = out0
-
     return like
 
 
 
 def compute_cond(cond, prior):
-    #rospy.loginfo("Prior: %s", prior)
     out1 = np.matmul(cond, prior.T)
     sum = out1
-
     return sum
 
+
+# def equation(P0, window, threshold):
+#     deltaX = window - 0
+#     deltaY = P0 - threshold
+#     slope = deltaY / deltaX
+#     interY = P0
+#     return slope, interY
 
 
 def compute_decay(n, timing, minimum, check1, check2, check3):
     rospy.loginfo("seconds: %s", timing)
+    #decay = interY - (slope * timing)
     decay = 0.95 - (0.06 * timing) # window 10 sec means --> NEVER decay under 35% !!!!!
     datakati = np.ones(n-1) * (1-decay)/(n-1)
     updated_prior = datakati
@@ -167,7 +172,6 @@ def compute_decay(n, timing, minimum, check1, check2, check3):
 def extra_term(summary, dec):
     ex = summary * dec
     extra = ex / np.sum(ex)
-
     return extra
 
 
@@ -175,7 +179,6 @@ def extra_term(summary, dec):
 def compute_post(likelihood, summary):
     out2 = likelihood * summary
     post = out2 / np.sum(out2)
-
     return post
 
 
@@ -183,7 +186,6 @@ def compute_post(likelihood, summary):
 def compute_final(likelihood, plus):
     out = likelihood * plus
     poster = out / np.sum(out)
-
     return poster
 
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
@@ -222,7 +224,7 @@ def run():
 
 
     # declare variables for first BAYES
-    posterior = 0
+    #posterior = 0
     g_prime_old = 0
     timing = 0
     minimum = 0
@@ -474,6 +476,8 @@ def run():
 
 
         else:
+            timing = 0
+
             state = 0
 
             rospy.loginfo("STATE - BAYES normal")
