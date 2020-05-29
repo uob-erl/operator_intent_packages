@@ -139,6 +139,7 @@ def compute_like(path, Angle, wpath, wphi):
 
 
 def compute_cond(cond, prior):
+    #rospy.loginfo("Prior: %s", prior)
     out1 = np.matmul(cond, prior.T)
     sum = out1
 
@@ -220,6 +221,7 @@ def run():
 
 
     # declare variables for first BAYES
+    posterior = 0
     g_prime_old = 0
     timing = 1
     minimum = 0
@@ -376,11 +378,7 @@ def run():
 
 
             while (timing < 10):
-                #rospy.loginfo("ksekina decay")
 
-                # cancel_msg = GoalID()
-                # cancel_pub.publish(cancel_msg)
-                # note = False
                 rospy.loginfo("STATE - BAYES me decay")
                 rospy.loginfo("seconds: %s", timing)
 
@@ -460,7 +458,7 @@ def run():
                 rospy.loginfo("len: %s", path)
                 rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("decay: %s", dec)
-                rospy.loginfo("Posterior would be: %s", posterior)
+                #rospy.loginfo("Posterior would be: %s", posterior)
                 rospy.loginfo("Posterior: %s", final)
                 rospy.loginfo("Potential Goal is %s", index+1)
 
@@ -474,7 +472,6 @@ def run():
 
         else:
             state = 0
-            note = False
             timing = 1
             rospy.loginfo("STATE - BAYES kanonikos")
             wphi = 0.65
@@ -485,8 +482,8 @@ def run():
             Delta = 0.2
 
             # Initialize Prior-beliefs according to goals' number
-            data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-            prior1 = data0
+            # data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
+            # prior = data0
             #prior = posterior
 
             # creation of Conditional Probability Table 'nxn' according to goals & Delta
@@ -539,7 +536,7 @@ def run():
                 length = np.append(length, path_length)
             path = length
 
-
+            #rospy.loginfo("Prior: %s", prior)
             likelihood = compute_like(path, Angle, wpath, wphi)
             conditional = compute_cond(cond, prior)
             posterior = compute_post(likelihood, conditional)
@@ -550,6 +547,7 @@ def run():
             rospy.loginfo("rotate: %s", yaw_degrees)
             rospy.loginfo("len: %s", path)
             rospy.loginfo("Angles: %s", Angle)
+
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index+1)
 
@@ -557,6 +555,9 @@ def run():
 
 
             pub.publish(index+1)
+            poster1.publish(posterior[0])
+            poster2.publish(posterior[1])
+            poster3.publish(posterior[2])
 
 
 
