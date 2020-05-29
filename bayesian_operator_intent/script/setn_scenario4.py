@@ -148,7 +148,8 @@ def compute_cond(cond, prior):
 
 
 def compute_decay(n, timing, minimum, check1, check2, check3):
-    decay = 0.95 - (0.095 * timing)
+    rospy.loginfo("seconds: %s", timing)
+    decay = 0.95 - (0.06 * timing) # window 10 sec means --> NEVER decay under 35% !!!!!
     datakati = np.ones(n-1) * (1-decay)/(n-1)
     updated_prior = datakati
     allo = (1-decay)/(n-1)
@@ -223,7 +224,7 @@ def run():
     # declare variables for first BAYES
     posterior = 0
     g_prime_old = 0
-    timing = 1
+    timing = 0
     minimum = 0
     index = 0
     state = 0
@@ -380,7 +381,9 @@ def run():
             while (timing < 10):
 
                 rospy.loginfo("STATE - BAYES me decay")
-                rospy.loginfo("seconds: %s", timing)
+                #rospy.loginfo("likelihood: %s", likelihood)
+
+
 
                 wphi = 0.65
                 wpath = 0.35
@@ -443,22 +446,22 @@ def run():
                     length = np.append(length, path_length)
                 path = length
 
-
+                #rospy.loginfo("Prior would be: %s", prior)
                 likelihood = compute_like(path, Angle, wpath, wphi)
                 dec = compute_decay(n, timing, minimum, check1, check2, check3)
                 summary = compute_cond(cond, prior)
                 posterior = compute_post(likelihood, summary)
-                prior = posterior
                 plus = extra_term(summary, dec)
                 final = compute_final(likelihood, plus)
                 index = np.argmax(final)
+                prior = final
 
                 # print ...
-                rospy.loginfo("rotate: %s", yaw_degrees)
-                rospy.loginfo("len: %s", path)
-                rospy.loginfo("Angles: %s", Angle)
+                #rospy.loginfo("rotate: %s", yaw_degrees)
+                #rospy.loginfo("len: %s", path)
+                #rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("decay: %s", dec)
-                #rospy.loginfo("Posterior would be: %s", posterior)
+                rospy.loginfo("Posterior would be: %s", posterior)
                 rospy.loginfo("Posterior: %s", final)
                 rospy.loginfo("Potential Goal is %s", index+1)
 
@@ -472,8 +475,8 @@ def run():
 
         else:
             state = 0
-            timing = 1
-            rospy.loginfo("STATE - BAYES kanonikos")
+
+            rospy.loginfo("STATE - BAYES normal")
             wphi = 0.65
             wpath = 0.35
 
@@ -485,6 +488,8 @@ def run():
             # data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
             # prior = data0
             #prior = posterior
+
+            rospy.loginfo("Prior: %s", prior)
 
             # creation of Conditional Probability Table 'nxn' according to goals & Delta
             data_cpt = np.ones((n, n)) * (Delta / (n-1))
@@ -544,9 +549,9 @@ def run():
             prior = posterior
 
             # print ...
-            rospy.loginfo("rotate: %s", yaw_degrees)
-            rospy.loginfo("len: %s", path)
-            rospy.loginfo("Angles: %s", Angle)
+            #rospy.loginfo("rotate: %s", yaw_degrees)
+            #rospy.loginfo("len: %s", path)
+            #rospy.loginfo("Angles: %s", Angle)
 
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index+1)
