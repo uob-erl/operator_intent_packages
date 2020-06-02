@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
-
 import rospy
 import numpy as np
 import random
@@ -25,23 +24,6 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
 from sensor_msgs.msg import LaserScan
 from random import randint
 
-# g1 = [18.4734783173, -0.299915790558]
-#
-# g2 = [22.5236606598, -2.63952469826]
-#
-#
-# g3 = [29.0113964081, -0.833422660828]
-#
-#
-# g4 = [26.8627986908, -6.38541555405]
-#
-#
-# g5 = [23.6445789337, -8.47383022308]
-#
-#
-# g6 =[19.8492908478, -7.68519210815]
-
-
 
 x_robot = 0.0
 y_robot = 0.0
@@ -62,23 +44,19 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
-checkA = 0
-checkB = 0
+check1 = 0
+check2 = 0
+check3 = 0
 state = 0
 
 
-
-
-# FIRST set of goals
+# set of goals
 G1 = Point()
 G2 = Point()
 G3 = Point()
 
-
 Goal = PoseStamped()
 Start = PoseStamped()
-
-
 
 
 
@@ -127,7 +105,7 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 
-#compute likelihood : P(Z|goal) = normalized [e^(-k*Z)] , for all goals-distances
+# compute Likelihood : P(Z|goal) = W1*exp(-angle) * W2*exp(-path), for all goals
 def compute_like(path, Angle, wpath, wphi):
     Path_norm = np.array([(path[0] / np.sum(path)), (path[1] / np.sum(path)), (path[2] / np.sum(path))])
     Angle_norm = np.array([(Angle[0] / np.sum(Angle)), (Angle[1] / np.sum(Angle)), (Angle[2] / np.sum(Angle))])
@@ -137,45 +115,15 @@ def compute_like(path, Angle, wpath, wphi):
 
 
 
+# compute transition model
 def compute_cond(cond, prior):
     out1 = np.matmul(cond, prior.T)
     sum = out1
     return sum
 
 
-# def equation(P0, window, threshold):
-#     deltaX = window - 0
-#     deltaY = P0 - threshold
-#     slope = deltaY / deltaX
-#     interY = P0
-#     return slope, interY
 
-
-def compute_decay(n, timing, minimum, check1, check2, check3):
-    rospy.loginfo("seconds: %s", timing)
-    #decay = interY - (slope * timing)
-    decay = 0.95 - (0.06 * timing) # window 10 sec means --> NEVER decay under 35% !!!!!
-    datakati = np.ones(n-1) * (1-decay)/(n-1)
-    updated_prior = datakati
-    allo = (1-decay)/(n-1)
-    if minimum == check1:
-        updated_prior = np.array([decay, allo, allo])
-    elif minimum == check2:
-        updated_prior = np.array([allo, decay, allo])
-    else:
-        updated_prior = np.array([allo, allo, decay])
-
-    return updated_prior
-
-
-
-def extra_term(summary, dec):
-    ex = summary * dec
-    extra = ex / np.sum(ex)
-    return extra
-
-
-# compute posterior P(goal|theta) = normalized(likelihood * conditional)
+# compute posterior P(goal|Z) = normalized(Likelihood * transition)  # Normal BAYES
 def compute_post(likelihood, summary):
     out2 = likelihood * summary
     post = out2 / np.sum(out2)
@@ -183,6 +131,46 @@ def compute_post(likelihood, summary):
 
 
 
+# given desired initial-clicked probability=P0, time-window, and final-clicked probability=threshold
+# compute the parameters (slope, interY) of the appropriate linear decay function
+def equation(P0, window, threshold):
+    deltaX = window - 0
+    deltaY = P0 - threshold
+    slope = deltaY / deltaX
+    interY = P0
+    return slope, interY
+
+
+
+# compute the linear decay function given the parameters ...
+# 1st loop (t=0) --> decay[] = prior[]
+# 2nd loop --> decay[] != prior
+# .....
+# prior[] takes the posterior's values AND decay[] takes normalized reduced values based on equation
+def compute_decay(n, timing, minimum, check1, check2, check3, slope, interY):
+    rospy.loginfo("seconds: %s", timing)
+    decay = interY - (slope * timing) # window = 10sec here means --> NEVER decay under 35%  = threshold !!!!!
+    datadec = np.ones(n-1) * (1-decay)/(n-1)
+    updated = datadec
+    rest = (1-decay)/(n-1)
+    if minimum == check1:
+        updated = np.array([decay, rest, rest])
+    elif minimum == check2:
+        updated = np.array([rest, decay, rest])
+    else:
+        updated = np.array([rest, rest, decay])
+
+    return updated
+
+
+# compute transition model   # BAYES with decay
+def extra_term(summary, dec):
+    ex = summary * dec
+    extra = ex #/ np.sum(ex)
+    return extra
+
+
+# compute posterior   # BAYES with decay
 def compute_final(likelihood, plus):
     out = likelihood * plus
     poster = out / np.sum(out)
@@ -223,22 +211,21 @@ def run():
     poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
 
 
-    # declare variables for first BAYES
-    #posterior = 0
+    # initializations
+    P0 = 0.95
+    window = 10
+    threshold = 0.35
     g_prime_old = 0
     timing = 0
     minimum = 0
+    value = 4
     index = 0
     state = 0
-    wphi = 0.65
-    wpath = 0.35
-
-    l = 0.95
-
-    n = 3   # number of total goals (prime+subgoals)
-
+    wphi = 0.65  # angle weight
+    wpath = 0.35  # path weight
+    n = 3   # number of goals
     Delta = 0.2
-    p = (1-l)/(n-1)
+    p = (1-P0)/(n-1) # rest of prior values in decay mode
 
 
 
@@ -267,11 +254,7 @@ def run():
         g2 = [21.3006038666, -17.3720340729] #gcenter
         g3 = [4.67607975006, -20.1855487823] #gright
 
-
-
         targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-
-
 
 
 
@@ -308,8 +291,6 @@ def run():
 
 
 
-
-
         try:
 
             (translation, rotation) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
@@ -339,12 +320,6 @@ def run():
 
 
 
-
-        # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
-        # robot = [translation[0], translation[1]]
-        # rospy.loginfo("Robot_FRAME: %s", robot)
-
-
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
@@ -353,58 +328,46 @@ def run():
 
 
 
-# -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
+        # ! given the clicked point decide the potential goal !
+        # Simply, e.g. if i choose to click around g2, then the euclidean between g2 and click is minimum
+        # so g2 prior becomes greater than others ---->  decay function starts to be computed ---> BAYES with Decay
+        check1 = distance.euclidean(g_prime, g1)
+        #rospy.loginfo("Check1: %s", check1)
 
-        check1 = distance.euclidean(g_prime, g1) #allagi g1 se g_refA
-        #rospy.loginfo("Check: %s", check1)
+        check2 = distance.euclidean(g_prime, g2)
+        #rospy.loginfo("Check2: %s", check2)
 
-        check2 = distance.euclidean(g_prime, g2) #allagi g1 se g_refA
-        #rospy.loginfo("Check: %s", check2)
+        check3 = distance.euclidean(g_prime, g3)
+        #rospy.loginfo("Check3: %s", check3)
 
-        check3 = distance.euclidean(g_prime, g3) #allagi g1 se g_refA
-        #rospy.loginfo("Check: %s", check3)
         check = [check1, check2, check3]
         minimum = min(check)
 
-        note = any(i<=5 for i in check)
+        note = any(i<=value for i in check)
         if note and state == 0 and g_prime != g_prime_old:
             g_prime_old = g_prime
             state = 1
             rospy.loginfo("STATE - BAYES me decay")
 
             if minimum == check1:
-                prior = np.array([l, p, p])
+                prior = np.array([P0, p, p])
             elif minimum == check2:
-                prior = np.array([p, l, p])
+                prior = np.array([p, P0, p])
             else:
-                prior = np.array([p, p, l])
+                prior = np.array([p, p, P0])
 
 
             while (timing < 10):
+                # decay function starts to be computed
 
                 rospy.loginfo("STATE - BAYES me decay")
-                #rospy.loginfo("likelihood: %s", likelihood)
-
-
-
-                wphi = 0.65
-                wpath = 0.35
-
-                n = 3  # number of total goals (prime+subgoals)
-
-                Delta = 0.2
-
-                l = 0.95
 
                 rospy.loginfo("prior: %s", prior)
 
-                # creation of Conditional Probability Table 'nxn' according to goals & Delta
-                data_cpt = np.ones((n, n)) * (Delta / (n-1))
-                np.fill_diagonal(data_cpt, 1-Delta)
-                cond = data_cpt
 
 
-                # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
+    # 1st OBSERVATION -------------------------------------------------------------------------
+                # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
                 robot_base = [0, 0]
 
                 # if n=3 ..
@@ -418,9 +381,12 @@ def run():
                 Dy = dx[ind_pos_y]
                 angle = np.arctan2(Dy, Dx) * 180 / np.pi
                 Angle = abs(angle)
+    # 1st OBSERVATION -------------------------------------------------------------------------
 
 
-                # generate plan towards goals --> n-path lengths .. (3rd Observation)
+
+    # 2nd OBSERVATION ---------------------------------------------------------------------------
+                # generate plan towards goals --> n-path lengths .. (2nd Observation)
                 length = np.array([])
                 for j in targets:
 
@@ -447,24 +413,40 @@ def run():
 
                     length = np.append(length, path_length)
                 path = length
+    # 2nd OBSERVATION ---------------------------------------------------------------------------
 
-                #rospy.loginfo("Prior would be: %s", prior)
+
+
+
+
+    # BAYES' FILTER with Decay ------------------------------------------------
+
+                # compute parameter's decay equation
+                [slope, interY] = equation(P0, window, threshold)
+                rospy.loginfo("slope: %s", slope)
+                rospy.loginfo("interY %s", interY)
+
                 likelihood = compute_like(path, Angle, wpath, wphi)
-                dec = compute_decay(n, timing, minimum, check1, check2, check3)
+                dec = compute_decay(n, timing, minimum, check1, check2, check3, slope, interY)
+
                 summary = compute_cond(cond, prior)
-                posterior = compute_post(likelihood, summary)
+
+                # what posterior trully is with extra term
                 plus = extra_term(summary, dec)
-                final = compute_final(likelihood, plus)
-                index = np.argmax(final)
-                prior = final
+                posterior = compute_final(likelihood, plus)
+
+                index = np.argmax(posterior)
+                prior = posterior
+
+    # BAYES' FILTER with Decay------------------------------------------------
+
 
                 # print ...
                 #rospy.loginfo("rotate: %s", yaw_degrees)
                 #rospy.loginfo("len: %s", path)
                 #rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("decay: %s", dec)
-                rospy.loginfo("Posterior would be: %s", posterior)
-                rospy.loginfo("Posterior: %s", final)
+                rospy.loginfo("POSTERIOR: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index+1)
 
                 timing = timing + 1
@@ -476,32 +458,18 @@ def run():
 
 
         else:
-            timing = 0
 
+            timing = 0
             state = 0
 
             rospy.loginfo("STATE - BAYES normal")
-            wphi = 0.65
-            wpath = 0.35
-
-            n = 3   # number of total goals (prime+subgoals)
-
-            Delta = 0.2
-
-            # Initialize Prior-beliefs according to goals' number
-            # data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-            # prior = data0
-            #prior = posterior
 
             rospy.loginfo("Prior: %s", prior)
 
-            # creation of Conditional Probability Table 'nxn' according to goals & Delta
-            data_cpt = np.ones((n, n)) * (Delta / (n-1))
-            np.fill_diagonal(data_cpt, 1-Delta)
-            cond = data_cpt
 
 
-            # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
+    # 1st OBSERVATION ---------------------------------------------------------------------------
+            # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
             robot_base = [0, 0]
 
             # if n=3 ..
@@ -515,9 +483,11 @@ def run():
             Dy = dx[ind_pos_y]
             angle = np.arctan2(Dy, Dx) * 180 / np.pi
             Angle = abs(angle)
+    # 1st OBSERVATION ---------------------------------------------------------------------------
 
 
-            # generate plan towards goals --> n-path lengths .. (3rd Observation)
+    # 2nd OBSERVATION ---------------------------------------------------------------------------
+            # generate plan towards goals --> n-path lengths .. (2nd Observation)
             length = np.array([])
             for j in targets:
 
@@ -540,17 +510,23 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.05) # 0.05 x 4 = 0.2 sec
+                rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
 
                 length = np.append(length, path_length)
             path = length
+    # 2nd OBSERVATION ---------------------------------------------------------------------------
 
-            #rospy.loginfo("Prior: %s", prior)
+
+    # BAYES' FILTER ------------------------------------------------
+
             likelihood = compute_like(path, Angle, wpath, wphi)
             conditional = compute_cond(cond, prior)
             posterior = compute_post(likelihood, conditional)
             index = np.argmax(posterior)
             prior = posterior
+
+    # BAYES' FILTER ------------------------------------------------
+
 
             # print ...
             #rospy.loginfo("rotate: %s", yaw_degrees)

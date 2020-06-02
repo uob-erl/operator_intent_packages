@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
-
-
 import rospy
 import numpy as np
 import random
@@ -25,8 +23,6 @@ from sensor_msgs.msg import LaserScan
 from random import randint
 
 
-
-
 x_robot = 0.0
 y_robot = 0.0
 rot_angle = 0
@@ -46,11 +42,6 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
-checkA = 0
-checkB = 0
-state = 0
-
-
 
 
 # FIRST set of goals
@@ -58,11 +49,8 @@ G1 = Point()
 G2 = Point()
 G3 = Point()
 
-
 Goal = PoseStamped()
 Start = PoseStamped()
-
-
 
 
 
@@ -117,10 +105,11 @@ def compute_like(path, Angle, wpath, wphi):
     like = out0
     return like
 
+
 # compute conditional
 def compute_cond(cond, prior):
     out1 =  np.matmul(cond, prior.T)
-    sum = out1 #/ np.sum(out1)
+    sum = out1
     return sum
 
 
@@ -169,18 +158,13 @@ def run():
     index = 0
     wphi = 0.65
     wpath = 0.35
-
-    n = 3   # number of total goals (prime+subgoals)
-
+    n = 3   # number of goals
     Delta = 0.2
-
 
 
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
     prior = data0
-
-
 
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
@@ -201,13 +185,7 @@ def run():
         g2 = [6.86671924591, -9.13561820984] #gcenter
         g3 = [4.69921255112, -4.81423997879] #gright
 
-
-
-
-
         targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-
-
 
 
 
@@ -237,8 +215,6 @@ def run():
 
 
 
-
-
         try:
 
             (translation, rotation) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
@@ -265,13 +241,6 @@ def run():
         g3_new = [list3.point.x, list3.point.y]
 
 
-
-
-        # NEW robot's coordinates after transformation (we don't care !) --- robot's x,y always 0 in ROBOT FRAME
-        # robot = [translation[0], translation[1]]
-        # rospy.loginfo("Robot_FRAME: %s", robot)
-
-
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
@@ -281,10 +250,8 @@ def run():
 
 
 
-# -------------------------------------------------- O B S E R V A T I O N S ------------------------------------------------------------- #
 
-
-
+# 1st OBSERVATION -------------------------------------------------------------------------
         # angles computation between robot (x=0, y=0) & each transformed goal (2nd Observation)
         robot_base = [0, 0]
 
@@ -299,8 +266,11 @@ def run():
         Dy = dx[ind_pos_y]
         angle = np.arctan2(Dy, Dx) * 180 / np.pi
         Angle = abs(angle)
+# 1st OBSERVATION -------------------------------------------------------------------------
 
 
+
+# 2nd OBSERVATION -------------------------------------------------------------------------
         # generate plan towards goals --> n-path lengths .. (3rd Observation)
         length = np.array([])
         for j in targets:
@@ -328,17 +298,23 @@ def run():
 
             length = np.append(length, path_length)
         path = length
+# 2nd OBSERVATION -------------------------------------------------------------------------
 
 
-        # BAYES' FILTER
+
+# BAYES' FILTER ----------------------------------------------------------------------
+
         likelihood = compute_like(path, Angle, wpath, wphi)
         conditional = compute_cond(cond, prior)
         posterior = compute_post(likelihood, conditional)
         index = np.argmax(posterior)
         prior = posterior
 
+# BAYES' FILTER ----------------------------------------------------------------------
+
+
         # print ...
-        rospy.loginfo("rotate: %s", yaw_degrees)
+        #rospy.loginfo("rotate: %s", yaw_degrees)
         rospy.loginfo("len: %s", path)
         rospy.loginfo("Angles: %s", Angle)
         rospy.loginfo("Posterior: %s", posterior)
