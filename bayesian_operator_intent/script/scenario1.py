@@ -97,18 +97,16 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi):
-    Path_norm = np.array([(path[0] / np.sum(path)), (path[1] / np.sum(path)), (path[2] / np.sum(path))])
-    Angle_norm = np.array([(Angle[0] / np.sum(Angle)), (Angle[1] / np.sum(Angle)), (Angle[2] / np.sum(Angle))])
-    out0 = (wpath * np.exp(-Path_norm)) * (wphi * np.exp(-Angle_norm))
-    like = out0
+def compute_like(path, Angle, wpath, wphi): 
+    a = Angle / np.sum(Angle)
+    p = path / np.sum(path)
+    like = np.exp(-a/wphi) * np.exp(-p/wpath)
     return like
 
 
 # compute conditional
 def compute_cond(cond, prior):
-    out1 =  np.matmul(cond, prior.T)
-    sum = out1
+    sum =  np.matmul(cond, prior.T)
     return sum
 
 
@@ -146,18 +144,34 @@ def run():
 
 
     # Publishers
-    pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
+    pub = rospy.Publisher('most_probable_goal', Float32, queue_size = 1)
     poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
     poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
     poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
+    angle1 = rospy.Publisher('angle1', Float32, queue_size = 1)
+    angle2 = rospy.Publisher('angle2', Float32, queue_size = 1)
+    angle3 = rospy.Publisher('angle3', Float32, queue_size = 1)
+    path1 = rospy.Publisher('path1', Float32, queue_size = 1)
+    path2 = rospy.Publisher('path2', Float32, queue_size = 1)
+    path3 = rospy.Publisher('path3', Float32, queue_size = 1)
+    dis1 = rospy.Publisher('dis1', Float32, queue_size = 1)
+    dis2 = rospy.Publisher('dis2', Float32, queue_size = 1)
+    dis3 = rospy.Publisher('dis3', Float32, queue_size = 1)
+    term1 = rospy.Publisher('term1', Float32, queue_size = 1)
+    term2 = rospy.Publisher('term2', Float32, queue_size = 1)
+    term3 = rospy.Publisher('term3', Float32, queue_size = 1)
+    rot = rospy.Publisher('rot', Float32, queue_size = 1)
+
+
 
 
     # declare variables for first BAYES
     index = 0
-    wphi = 0.65
-    wpath = 0.35
+    wphi = 0.6
+    wpath = 0.4
     n = 3   # number of total goals (prime+subgoals)
     Delta = 0.2
+    k = 2
 
 
     # Initialize Prior-beliefs according to goals' number
@@ -171,7 +185,7 @@ def run():
     cond = data_cpt
 
 
-    rate = rospy.Rate(4) # 4 Hz (4 loops/sec) .. (0.25 sec)
+    rate = rospy.Rate(3) # 4 Hz (4 loops/sec) .. (0.25 sec)
 
 
     while not rospy.is_shutdown():
@@ -234,6 +248,7 @@ def run():
         # rotation angle of the robot = yaw in ROBOT FRAME
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
         yaw_degrees = yaw * 180 / np.pi
+	rot = yaw_degrees
 
 
         # NEW coordinates' goals after transformations (ROBOT FRAME)
@@ -246,6 +261,14 @@ def run():
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
+
+         
+        # it is needed just for saving the values
+        measure = np.array([])
+        for x in targets:
+            dis = distance.euclidean(robot_coord, x)
+            measure = np.append(measure, dis)
+        dis = measure
 
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
@@ -268,6 +291,8 @@ def run():
         Dy = dx[ind_pos_y]
         angle = np.arctan2(Dy, Dx) * 180 / np.pi
         Angle = abs(angle)
+	
+	term = 180 - abs(rot-Angle)
 # 1st OBSERVATION -------------------------------------------------------------------------
 
 
@@ -324,6 +349,19 @@ def run():
         poster1.publish(posterior[0])
         poster2.publish(posterior[1])
         poster3.publish(posterior[2])
+        angle1.publish(Angle[0])
+        angle2.publish(Angle[1])
+        angle3.publish(Angle[2])
+        path1.publish(path[0])
+        path2.publish(path[1])
+        path3.publish(path[2])
+        dis1.publish(dis[0])
+        dis2.publish(dis[1])
+        dis3.publish(dis[2])
+	term1.publish(term[0])
+	term2.publish(term[1])
+	term3.publish(term[2])
+	rot.publish(rot)
 
 
 

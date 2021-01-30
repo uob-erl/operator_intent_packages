@@ -51,8 +51,6 @@ check2 = 0
 check3 = 0
 check4 = 0
 check5 = 0
-check6 = 0
-check7 = 0
 state = 0
 
 
@@ -62,8 +60,6 @@ G2 = Point()
 G3 = Point()
 G4 = Point()
 G5 = Point()
-G6 = Point()
-G7 = Point()
 
 Goal = PoseStamped()
 Start = PoseStamped()
@@ -116,19 +112,17 @@ def call(path_msg):
 
 
 # compute Likelihood : P(Z|goal) = W1*exp(-angle) * W2*exp(-path), for all goals
-def compute_like(path, Angle, wpath, wphi):
-    Path_norm = np.array([(path[0]/np.sum(path)), (path[1]/np.sum(path)), (path[2]/np.sum(path)), (path[3]/np.sum(path)), (path[4]/np.sum(path)), (path[5]/np.sum(path)), (path[6]/np.sum(path))])
-    Angle_norm = np.array([(Angle[0]/np.sum(Angle)), (Angle[1]/np.sum(Angle)), (Angle[2]/np.sum(Angle)), (Angle[3]/np.sum(Angle)), (Angle[4]/np.sum(Angle)), (Angle[5]/np.sum(Angle)), (Angle[6]/np.sum(Angle))])
-    out0 = (wpath * np.exp(-Path_norm)) * (wphi * np.exp(-Angle_norm))
-    like = out0
+# compute likelihood
+def compute_like(path, Angle, wpath, wphi): 
+    a = Angle / np.sum(Angle)
+    p = path / np.sum(path)
+    like = np.exp(-a/wphi) * np.exp(-p/wpath)
     return like
-
 
 
 # compute transition model
 def compute_cond(cond, prior):
-    out1 = np.matmul(cond, prior.T)
-    sum = out1
+    sum = np.matmul(cond, prior.T)
     return sum
 
 
@@ -157,26 +151,22 @@ def equation(P0, window, threshold):
 # 2nd loop --> decay[] != prior
 # .....
 # prior[] takes the posterior's values AND decay[] takes normalized reduced values based on equation
-def compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, check6, check7, slope, interY):
+def compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, slope, interY):
     rospy.loginfo("seconds: %s", timing)
     decay = interY - (slope * timing) # window = 10sec here means --> NEVER decay under 35%  = threshold !!!!!
     datadec = np.ones(n-1) * (1-decay)/(n-1)
     updated = datadec
     rest = (1-decay)/(n-1)
     if minimum == check1:
-        updated = np.array([decay, rest, rest, rest, rest, rest, rest])
+        updated = np.array([decay, rest, rest, rest, rest])
     elif minimum == check2:
-        updated = np.array([rest, decay, rest, rest, rest, rest, rest])
+        updated = np.array([rest, decay, rest, rest, rest])
     elif minimum == check3:
-        updated = np.array([rest, rest, decay, rest, rest, rest, rest])
+        updated = np.array([rest, rest, decay, rest, rest])
     elif minimum == check4:
-        updated = np.array([rest, rest, rest, decay, rest, rest, rest])
-    elif minimum == check5:
-        updated = np.array([rest, rest, rest, rest, decay, rest, rest])
-    elif minimum == check6:
-        updated = np.array([rest, rest, rest, rest, rest, decay, rest])
+        updated = np.array([rest, rest, rest, decay, rest])
     else:
-        updated = np.array([rest, rest, rest, rest, rest, rest, decay])
+        updated = np.array([rest, rest, rest, rest, decay])
 
     return updated
 
@@ -216,8 +206,8 @@ def run():
     listener3 = tf.TransformListener()
     listener4 = tf.TransformListener()
     listener5 = tf.TransformListener()
-    listener6 = tf.TransformListener()
-    listener7 = tf.TransformListener()
+
+
 
 
     # Subscribers
@@ -227,20 +217,41 @@ def run():
 
 
     # Publishers
-    pub = rospy.Publisher('possible_goal', Float32, queue_size = 1)
+    pub = rospy.Publisher('most_probable_goal', Float32, queue_size = 1)
     poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
     poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
     poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
     poster4 = rospy.Publisher('poster4', Float32, queue_size = 1)
     poster5 = rospy.Publisher('poster5', Float32, queue_size = 1)
-    poster6 = rospy.Publisher('poster6', Float32, queue_size = 1)
-    poster7 = rospy.Publisher('poster7', Float32, queue_size = 1)
+    angle1 = rospy.Publisher('angle1', Float32, queue_size = 1)
+    angle2 = rospy.Publisher('angle2', Float32, queue_size = 1)
+    angle3 = rospy.Publisher('angle3', Float32, queue_size = 1)
+    angle4 = rospy.Publisher('angle4', Float32, queue_size = 1)
+    angle5 = rospy.Publisher('angle5', Float32, queue_size = 1)
+    path1 = rospy.Publisher('path1', Float32, queue_size = 1)
+    path2 = rospy.Publisher('path2', Float32, queue_size = 1)
+    path3 = rospy.Publisher('path3', Float32, queue_size = 1)
+    path4 = rospy.Publisher('path4', Float32, queue_size = 1)
+    path5 = rospy.Publisher('path5', Float32, queue_size = 1)
+    dis1 = rospy.Publisher('dis1', Float32, queue_size = 1)
+    dis2 = rospy.Publisher('dis2', Float32, queue_size = 1)
+    dis3 = rospy.Publisher('dis3', Float32, queue_size = 1)
+    dis4 = rospy.Publisher('dis4', Float32, queue_size = 1)
+    dis5 = rospy.Publisher('dis5', Float32, queue_size = 1)
+    term1 = rospy.Publisher('term1', Float32, queue_size = 1)
+    term2 = rospy.Publisher('term2', Float32, queue_size = 1)
+    term3 = rospy.Publisher('term3', Float32, queue_size = 1)
+    term4 = rospy.Publisher('term4', Float32, queue_size = 1)
+    term5 = rospy.Publisher('term5', Float32, queue_size = 1)
+    rot = rospy.Publisher('rot', Float32, queue_size = 1)
+
+
 
 
     # initializations
     P0 = 0.95
     window = 10
-    threshold = 0.35
+    threshold = 0.25
     g_prime_old = 0
     timing = 0
     minimum = 0
@@ -249,9 +260,10 @@ def run():
     state = 0
     wphi = 0.65  # angle weight
     wpath = 0.35  # path weight
-    n = 7   # number of goals
+    n = 5   # number of goals
     Delta = 0.2
     p = (1-P0)/(n-1) # rest of prior values in decay mode
+    k = 2
 
 
 
@@ -267,7 +279,7 @@ def run():
     cond = data_cpt
 
 
-    rate = rospy.Rate(2) # 4 Hz (4 loops/sec) .. (0.5 sec)
+    rate = rospy.Rate(3) # 4 Hz (4 loops/sec) .. (0.5 sec)
 
 
     while not rospy.is_shutdown():
@@ -276,14 +288,13 @@ def run():
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
+
         g1 = [13.384099, -0.070828]
-        g2 = [18.697673, -0.090648]
-        g3 = [23.227645, -1.249789]
-        g4 = [29.208362, -0.728264]
-        g5 = [27.863958, -6.041914]
-        g6 = [23.862051, -8.185440]
-        g7 = [20.085504, -7.524883]
-        targets = [g1, g2, g3, g4, g5, g6, g7] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
+        g2 = [23.11985, -1.370935]
+        g3 = [29.208362, -0.728264]
+        g4 = [27.863958, -6.041914]
+        g5 = [20.085504, -7.524883]
+        targets = [g1, g2, g3, g4, g5] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
 
 
 
@@ -330,17 +341,6 @@ def run():
         G5_msg.point.x = g5[0]
         G5_msg.point.y = g5[1]
 
-        G6_msg = PointStamped()
-        G6_msg.header.frame_id = "map"
-        G6_msg.header.stamp = rospy.Time(0)
-        G6_msg.point.x = g6[0]
-        G6_msg.point.y = g6[1]
-
-        G7_msg = PointStamped()
-        G7_msg.header.frame_id = "map"
-        G7_msg.header.stamp = rospy.Time(0)
-        G7_msg.point.x = g7[0]
-        G7_msg.point.y = g7[1]
 
 
 
@@ -353,8 +353,8 @@ def run():
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
             list4 = listener4.transformPoint("/base_link", G4_msg)
             list5 = listener5.transformPoint("/base_link", G5_msg)
-            list6 = listener6.transformPoint("/base_link", G6_msg)
-            list7 = listener7.transformPoint("/base_link", G7_msg)
+
+
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
 
@@ -367,6 +367,7 @@ def run():
         # rotation angle of the robot = yaw in ROBOT FRAME
         (roll, pitch, yaw) = euler_from_quaternion(orientation_list)
         yaw_degrees = yaw * 180 / np.pi
+	rot = yaw_degrees
 
 
         # NEW coordinates' goals after transformations (ROBOT FRAME)
@@ -376,14 +377,23 @@ def run():
         g3_new = [list3.point.x, list3.point.y]
         g4_new = [list4.point.x, list4.point.y]
         g5_new = [list5.point.x, list5.point.y]
-        g6_new = [list6.point.x, list6.point.y]
-        g7_new = [list7.point.x, list7.point.y]
+
+
 
 
 
         # list of FIRST set of goals (ROBOT FRAME)
-        new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1], g5_new[0], g5_new[1], g6_new[0], g6_new[1], g7_new[0], g7_new[1]] # list
+        new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1], g5_new[0], g5_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
+
+
+        # it is needed just for saving the values
+        measure = np.array([])
+        for x in targets:
+            dis = distance.euclidean(robot_coord, x)
+            measure = np.append(measure, dis)
+        dis = measure
+        rospy.loginfo("Distance: %s", dis)
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
@@ -403,37 +413,37 @@ def run():
 
         check4 = distance.euclidean(g_prime, g4)
         check5 = distance.euclidean(g_prime, g5)
-        check6 = distance.euclidean(g_prime, g6)
-        check7 = distance.euclidean(g_prime, g7)
 
-        check = [check1, check2, check3, check4, check5, check6, check7]
+
+
+        check = [check1, check2, check3, check4, check5]
         minimum = min(check)
 
         note = any(i<=value for i in check)
         if note and state == 0 and g_prime != g_prime_old:
             g_prime_old = g_prime
+
+            timing = 0
             state = 1
             rospy.loginfo("STATE - BAYES me decay")
 
             if minimum == check1:
-                prior = np.array([P0, p, p, p, p, p, p])
+                prior = np.array([P0, p, p, p, p])
             elif minimum == check2:
-                prior = np.array([p, P0, p, p, p, p, p])
+                prior = np.array([p, P0, p, p, p])
             elif minimum == check3:
-                prior = np.array([p, p, P0, p, p, p, p])
+                prior = np.array([p, p, P0, p, p])
             elif minimum == check4:
-                prior = np.array([p, p, p, P0, p, p, p])
-            elif minimum == check5:
-                prior = np.array([p, p, p, p, P0, p, p])
-            elif minimum == check6:
-                prior = np.array([p, p, p, p, p, P0, p])
+                prior = np.array([p, p, p, P0, p])
             else:
-                prior = np.array([p, p, p, p, p, p, P0])
+                prior = np.array([p, p, p, p, P0])
 
 
-            while (timing < 10):
+            while (timing < 10) and (g_prime == g_prime_old):
+                g_prime = [x_nav, y_nav]  # CLICKED point - g'
+
+
                 # decay function starts to be computed
-
                 rospy.loginfo("STATE - BAYES me decay")
 
                 rospy.loginfo("prior: %s", prior)
@@ -445,8 +455,8 @@ def run():
                 robot_base = [0, 0]
 
                 # if n=7 ..
-                ind_pos_x = [0, 2, 4, 6, 8, 10, 12]
-                ind_pos_y = [1, 3, 5, 7, 9, 11, 13]
+                ind_pos_x = [0, 2, 4, 6, 8]
+                ind_pos_y = [1, 3, 5, 7, 9]
 
 
                 dx = new - robot_base[0]
@@ -455,6 +465,7 @@ def run():
                 Dy = dx[ind_pos_y]
                 angle = np.arctan2(Dy, Dx) * 180 / np.pi
                 Angle = abs(angle)
+		term = 180 - abs(rot-Angle)
     # 1st OBSERVATION -------------------------------------------------------------------------
 
 
@@ -463,7 +474,6 @@ def run():
                 # generate plan towards goals --> n-path lengths .. (2nd Observation)
                 length = np.array([])
                 for j in targets:
-
                     Start = PoseStamped()
                     Start.header.seq = 0
                     Start.header.frame_id = "map"
@@ -483,7 +493,7 @@ def run():
                     srv.goal = Goal
                     srv.tolerance = 0.5
                     resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                    rospy.sleep(0.05) # 0.05 x 7 = 0.35 sec
+                    rospy.sleep(0.03) # 0.04 x 7 = 0.15 sec
 
                     length = np.append(length, path_length)
                 path = length
@@ -501,7 +511,7 @@ def run():
                 rospy.loginfo("interY %s", interY)
 
                 likelihood = compute_like(path, Angle, wpath, wphi)
-                dec = compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, check6, check7, slope, interY)
+                dec = compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, slope, interY)
 
                 summary = compute_cond(cond, prior)
 
@@ -517,17 +527,21 @@ def run():
 
                 # print ...
                 #rospy.loginfo("rotate: %s", yaw_degrees)
-                #rospy.loginfo("len: %s", path)
+                rospy.loginfo("len: %s", path)
                 #rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("decay: %s", dec)
                 rospy.loginfo("POSTERIOR: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index+1)
 
                 timing = timing + 1
-                rospy.sleep(0.5)
+                #rospy.sleep(0.25)
 
 
                 pub.publish(index+1)
+            else:
+                state = 0
+
+
 
 
 
@@ -547,8 +561,8 @@ def run():
             robot_base = [0, 0]
 
             # if n=7 ..
-            ind_pos_x = [0, 2, 4, 6, 8, 10, 12]
-            ind_pos_y = [1, 3, 5, 7, 9, 11, 13]
+            ind_pos_x = [0, 2, 4, 6, 8]
+            ind_pos_y = [1, 3, 5, 7, 9]
 
 
             dx = new - robot_base[0]
@@ -557,6 +571,7 @@ def run():
             Dy = dx[ind_pos_y]
             angle = np.arctan2(Dy, Dx) * 180 / np.pi
             Angle = abs(angle)
+	    term = 180 - abs(rot-Angle)
     # 1st OBSERVATION ---------------------------------------------------------------------------
 
 
@@ -584,7 +599,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.05) # 0.05 x 7 = 0.35 sec
+                rospy.sleep(0.03) # 0.05 x 7 = 0.15 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -604,7 +619,7 @@ def run():
 
             # print ...
             #rospy.loginfo("rotate: %s", yaw_degrees)
-            #rospy.loginfo("len: %s", path)
+            rospy.loginfo("len: %s", path)
             #rospy.loginfo("Angles: %s", Angle)
 
             rospy.loginfo("Posterior: %s", posterior)
@@ -619,8 +634,28 @@ def run():
             poster3.publish(posterior[2])
             poster4.publish(posterior[3])
             poster5.publish(posterior[4])
-            poster6.publish(posterior[5])
-            poster7.publish(posterior[6])
+            angle1.publish(Angle[0])
+            angle2.publish(Angle[1])
+            angle3.publish(Angle[2])
+            angle4.publish(Angle[3])
+            angle5.publish(Angle[4])
+            path1.publish(path[0])
+            path2.publish(path[1])
+            path3.publish(path[2])
+            path4.publish(path[3])
+            path5.publish(path[4])
+            dis1.publish(dis[0])
+            dis2.publish(dis[1])
+            dis3.publish(dis[2])
+            dis4.publish(dis[3])
+            dis5.publish(dis[4])
+	    term1.publish(term[0])
+	    term2.publish(term[1])
+	    term3.publish(term[2])
+	    term4.publish(term[3])
+	    term5.publish(term[4])
+	    rot.publish(rot)
+         
 
 
 
