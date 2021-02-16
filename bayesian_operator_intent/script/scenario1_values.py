@@ -1,26 +1,21 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
+
+# This script computes and collects only the necessary values/data that can be used in an offline script to estimate the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation. WE DO NOT PERFORM BAYES HERE !  
 import rospy
 import numpy as np
 import random
 import math
 import tf
-import actionlib
-from actionlib import ActionServer
-from actionlib_msgs.msg import GoalStatus
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Path
 from nav_msgs.srv import GetPlan
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Int32, Float32, Int8
-from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
-from sensor_msgs.msg import LaserScan
-from random import randint
 
 
 x_robot = 0.0
@@ -42,7 +37,6 @@ yaw = 0
 delta_yaw = 0
 orientation_list = 0
 path_length = 0
-
 
 # FIRST set of goals
 G1 = Point()
@@ -94,49 +88,13 @@ def call(path_msg):
 
 
 
-
-# -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
-
-# compute likelihood
-def compute_like(path, Angle, wpath, wphi): 
-    a = Angle / np.sum(Angle)
-    p = path / np.sum(path)
-    like = np.exp(-a/wphi) * np.exp(-p/wpath)
-    return like
-
-
-def compute_like(path, Angle, wpath, wphi): #weighted sum exponential sensor model sto [0,1]
-    p = path / np.sum(path)
-    a = Angle / np.sum(Angle)
-    like = (wpath * np.exp(-p)) + (wphi * np.exp(-a))
-    return like
-
-# compute conditional
-def compute_cond(cond, prior):
-    out1 =  np.matmul(cond, prior.T)
-    sum = out1
-    return sum
-
-
-# compute posterior P(goal|obs) = normalized(likelihood * conditional)
-def compute_post(likelihood, conditional):
-    out2 = likelihood * conditional
-    post = out2 / np.sum(out2)
-    return post
-
-# -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
-
-
-
-
 def run():
 
     rospy.init_node('bayesian_filter')
 
+
     # Create a callable proxy to GetPlan service
     get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
-
-
 
     # create tf.TransformListener objects
     listener = tf.TransformListener()
@@ -144,19 +102,12 @@ def run():
     listener2 = tf.TransformListener()
     listener3 = tf.TransformListener()
 
-
-
     # Subscribers
     rob_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, call_rot)
     nav_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, call_nav)
     sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, call)
 
-
     # Publishers
-    pub = rospy.Publisher('most_probable_goal', Float32, queue_size = 1)
-    poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
-    poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
-    poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
     angle1 = rospy.Publisher('angle1', Float32, queue_size = 1)
     angle2 = rospy.Publisher('angle2', Float32, queue_size = 1)
     angle3 = rospy.Publisher('angle3', Float32, queue_size = 1)
@@ -170,29 +121,7 @@ def run():
     term2 = rospy.Publisher('term2', Float32, queue_size = 1)
     term3 = rospy.Publisher('term3', Float32, queue_size = 1)
 
-
-
-    # declare variables for first BAYES
-    index = 0
-    wphi = 0.6
-    wpath = 0.4
-    n = 3   # number of goals
-    Delta = 0.2
-    k = 2
-
-
-    # Initialize Prior-beliefs according to goals' number
-    data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-    prior = data0
-
-
-    # creation of Conditional Probability Table 'nxn' according to goals & Delta
-    data_cpt = np.ones((n, n)) * (Delta / (n-1))
-    np.fill_diagonal(data_cpt, 1-Delta)
-    cond = data_cpt
-
-
-    rate = rospy.Rate(3) # 4 Hz (4 loops/sec) .. (0.25 sec)
+    rate = rospy.Rate(4) # 4 Hz (4 loops/sec) .. (0.25 sec)
 
 
     while not rospy.is_shutdown():
@@ -200,11 +129,14 @@ def run():
 
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
-        g1 = [4.60353183746, -13.2964735031] #gleft
-        g2 = [6.86671924591, -9.13561820984] #gcenter
-        g3 = [4.69921255112, -4.81423997879] #gright
+
+        # as husky sees
+        g1 = [24.4425258636, 12.7283153534] #gleft
+        g2 = [29.08319664, 12.852309227] #gcenter = HUMAN
+        g3 = [33.7569503784, 12.5955343246] #gright
 
         targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
+
 
 
 
@@ -261,9 +193,11 @@ def run():
         g3_new = [list3.point.x, list3.point.y]
 
 
+
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
+
 
         # it is needed just for saving the values
         measure = np.array([])
@@ -298,7 +232,6 @@ def run():
 # 1st OBSERVATION -------------------------------------------------------------------------
 
 
-
 # 2nd OBSERVATION -------------------------------------------------------------------------
         # generate plan towards goals --> n-path lengths .. (3rd Observation)
         length = np.array([])
@@ -329,33 +262,12 @@ def run():
         path = length
 # 2nd OBSERVATION -------------------------------------------------------------------------
 
-
-
-# BAYES' FILTER ----------------------------------------------------------------------
-
-        likelihood = compute_like(path, Angle, wpath, wphi)
-        conditional = compute_cond(cond, prior)
-        posterior = compute_post(likelihood, conditional)
-        index = np.argmax(posterior)
-        prior = posterior
-
-# BAYES' FILTER ----------------------------------------------------------------------
-
-
         # print ...
-        #rospy.loginfo("rotate: %s", yaw_degrees)
-        rospy.loginfo("len: %s", path)
+        rospy.loginfo("Distance: %s", dis)
+        rospy.loginfo("Leng: %s", path)
         rospy.loginfo("Angles: %s", Angle)
-        rospy.loginfo("Posterior: %s", posterior)
-        rospy.loginfo("Potential Goal is %s", index+1)
 
 
-
-
-        pub.publish(index+1)
-        poster1.publish(posterior[0])
-        poster2.publish(posterior[1])
-        poster3.publish(posterior[2])
         angle1.publish(Angle[0])
         angle2.publish(Angle[1])
         angle3.publish(Angle[2])
@@ -368,10 +280,6 @@ def run():
 	term1.publish(term[0])
 	term2.publish(term[1])
 	term3.publish(term[2])
-
-
-
-
 
 
         rate.sleep()

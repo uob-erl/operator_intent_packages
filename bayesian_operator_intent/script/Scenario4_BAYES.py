@@ -1,28 +1,21 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
+
+# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation. 
 import rospy
 import numpy as np
 import random
 import math
 import tf
-import time
-import actionlib
-from actionlib import ActionServer
-from actionlib_msgs.msg import GoalStatus
-from actionlib_msgs.msg import GoalStatus, GoalID
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Path
 from nav_msgs.srv import GetPlan
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Int32, Float32, Int8
-from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
-from sensor_msgs.msg import LaserScan
-from random import randint
 
 
 
@@ -111,13 +104,12 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 
-# compute Likelihood : P(Z|goal) = W1*exp(-angle) * W2*exp(-path), for all goals
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi): 
-    a = Angle / np.sum(Angle)
-    p = path / np.sum(path)
-    like = np.exp(-a/wphi) * np.exp(-p/wpath)
-    return like
+def compute_like(path, Angle, wpath, wphi):
+     a = Angle / maxA
+     p = path / maxP
+     like = np.exp(-a/wphi) * np.exp(-p/wpath)
+     return like
 
 
 # compute transition model
@@ -196,8 +188,6 @@ def run():
     # Create a callable proxy to GetPlan service
     get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
 
-
-
     # create tf.TransformListener objects
     listener = tf.TransformListener()
     listenerNAV = tf.TransformListener()
@@ -207,14 +197,10 @@ def run():
     listener4 = tf.TransformListener()
     listener5 = tf.TransformListener()
 
-
-
-
     # Subscribers
     rob_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, call_rot)
     nav_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, call_nav)
     sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, call)
-
 
     # Publishers
     pub = rospy.Publisher('most_probable_goal', Float32, queue_size = 1)
@@ -233,19 +219,11 @@ def run():
     path3 = rospy.Publisher('path3', Float32, queue_size = 1)
     path4 = rospy.Publisher('path4', Float32, queue_size = 1)
     path5 = rospy.Publisher('path5', Float32, queue_size = 1)
-    dis1 = rospy.Publisher('dis1', Float32, queue_size = 1)
-    dis2 = rospy.Publisher('dis2', Float32, queue_size = 1)
-    dis3 = rospy.Publisher('dis3', Float32, queue_size = 1)
-    dis4 = rospy.Publisher('dis4', Float32, queue_size = 1)
-    dis5 = rospy.Publisher('dis5', Float32, queue_size = 1)
     term1 = rospy.Publisher('term1', Float32, queue_size = 1)
     term2 = rospy.Publisher('term2', Float32, queue_size = 1)
     term3 = rospy.Publisher('term3', Float32, queue_size = 1)
     term4 = rospy.Publisher('term4', Float32, queue_size = 1)
     term5 = rospy.Publisher('term5', Float32, queue_size = 1)
-
-
-
 
 
     # initializations
@@ -260,18 +238,16 @@ def run():
     state = 0
     wphi = 0.65  # angle weight
     wpath = 0.35  # path weight
+    maxA = 180
+    maxP = 25
     n = 5   # number of goals
     Delta = 0.2
     p = (1-P0)/(n-1) # rest of prior values in decay mode
     k = 2
 
-
-
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
     prior = data0
-
-
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
     data_cpt = np.ones((n, n)) * (Delta / (n-1))
@@ -279,7 +255,7 @@ def run():
     cond = data_cpt
 
 
-    rate = rospy.Rate(3) # 4 Hz (4 loops/sec) .. (0.5 sec)
+    rate = rospy.Rate(4) # 4 Hz (4 loops/sec) .. (0.5 sec)
 
 
     while not rospy.is_shutdown():
@@ -342,8 +318,6 @@ def run():
         G5_msg.point.y = g5[1]
 
 
-
-
         try:
 
             (translation, rotation) = listener.lookupTransform('/base_link', '/map', rospy.Time(0)) # transform robot to base_link (ROBOT FRAME) , returns x,y & rotation
@@ -353,7 +327,6 @@ def run():
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
             list4 = listener4.transformPoint("/base_link", G4_msg)
             list5 = listener5.transformPoint("/base_link", G5_msg)
-
 
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
@@ -379,21 +352,10 @@ def run():
         g5_new = [list5.point.x, list5.point.y]
 
 
-
-
-
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1], g5_new[0], g5_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
 
-
-        # it is needed just for saving the values
-        measure = np.array([])
-        for x in targets:
-            dis = distance.euclidean(robot_coord, x)
-            measure = np.append(measure, dis)
-        dis = measure
-        rospy.loginfo("Distance: %s", dis)
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
@@ -403,20 +365,17 @@ def run():
         # Simply, e.g. if i choose to click around g2, then the euclidean between g2 and click is minimum
         # so g2 prior becomes greater than others ---->  decay function starts to be computed ---> BAYES with Decay
         check1 = distance.euclidean(g_prime, g1)
-        #rospy.loginfo("Check1: %s", check1)
-
         check2 = distance.euclidean(g_prime, g2)
-        #rospy.loginfo("Check2: %s", check2)
-
         check3 = distance.euclidean(g_prime, g3)
-        #rospy.loginfo("Check3: %s", check3)
-
         check4 = distance.euclidean(g_prime, g4)
         check5 = distance.euclidean(g_prime, g5)
-
-
-
         check = [check1, check2, check3, check4, check5]
+	# or
+	#check = []
+	#for i in targets:
+    	    #eucl = distance.euclidean(g, i)
+    	    #check.append(eucl)
+        #print(check)
         minimum = min(check)
 
         note = any(i<=value for i in check)
@@ -454,7 +413,7 @@ def run():
                 # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
                 robot_base = [0, 0]
 
-                # if n=7 ..
+                # if n=5 ..
                 ind_pos_x = [0, 2, 4, 6, 8]
                 ind_pos_y = [1, 3, 5, 7, 9]
 
@@ -493,7 +452,7 @@ def run():
                     srv.goal = Goal
                     srv.tolerance = 0.5
                     resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                    rospy.sleep(0.03) # 0.04 x 7 = 0.15 sec
+                    rospy.sleep(0.04) # 0.04 x 5 = 0.20 sec
 
                     length = np.append(length, path_length)
                 path = length
@@ -528,7 +487,7 @@ def run():
                 # print ...
                 #rospy.loginfo("rotate: %s", yaw_degrees)
                 rospy.loginfo("len: %s", path)
-                #rospy.loginfo("Angles: %s", Angle)
+                rospy.loginfo("Angles: %s", Angle)
                 rospy.loginfo("decay: %s", dec)
                 rospy.loginfo("POSTERIOR: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index+1)
@@ -599,7 +558,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.03) # 0.05 x 7 = 0.15 sec
+                rospy.sleep(0.04) # 0.04 x 5 = 0.20 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -620,11 +579,9 @@ def run():
             # print ...
             #rospy.loginfo("rotate: %s", yaw_degrees)
             rospy.loginfo("len: %s", path)
-            #rospy.loginfo("Angles: %s", Angle)
-
+            rospy.loginfo("Angles: %s", Angle)
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index+1)
-
 
 
 

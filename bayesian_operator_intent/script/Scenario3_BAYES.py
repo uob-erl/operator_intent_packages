@@ -1,28 +1,21 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
+
+# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation. 
 import rospy
 import numpy as np
 import random
 import math
 import tf
-import time
-import actionlib
-from actionlib import ActionServer
-from actionlib_msgs.msg import GoalStatus
-from actionlib_msgs.msg import GoalStatus, GoalID
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import Path
 from nav_msgs.srv import GetPlan
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Int32, Float32, Int8
-from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
-from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal, MoveBaseActionGoal
-from sensor_msgs.msg import LaserScan
-from random import randint
 
 
 
@@ -106,28 +99,23 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 
-# compute Likelihood : P(Z|goal) = W1*exp(-angle) * W2*exp(-path), for all goals
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi): 
-    a = Angle / np.sum(Angle)
-    p = path / np.sum(path)
-    like = np.exp(-a/wphi) * np.exp(-p/wpath)
-    return like
+def compute_like(path, Angle, wpath, wphi):
+     a = Angle / maxA
+     p = path / maxP
+     like = np.exp(-a/wphi) * np.exp(-p/wpath)
+     return like
 
 # compute transition model
 def compute_cond(cond, prior):
     sum = np.matmul(cond, prior.T)
     return sum
 
-
-
 # compute posterior P(goal|Z) = normalized(Likelihood * transition)  # Normal BAYES
 def compute_post(likelihood, summary):
     out2 = likelihood * summary
     post = out2 / np.sum(out2)
     return post
-
-
 
 # given desired initial-clicked probability=P0, time-window, and final-clicked probability=threshold
 # compute the parameters (slope, interY) of the appropriate linear decay function
@@ -137,8 +125,6 @@ def equation(P0, window, threshold):
     slope = deltaY / deltaX
     interY = P0
     return slope, interY
-
-
 
 # compute the linear decay function given the parameters ...
 # 1st loop (t=0) --> decay[] = prior[]
@@ -157,14 +143,13 @@ def compute_decay(n, timing, minimum, check1, check2, check3, slope, interY):
         updated = np.array([rest, decay, rest])
     else:
         updated = np.array([rest, rest, decay])
-
     return updated
 
 
 # compute transition model   # BAYES with decay
 def extra_term(summary, dec):
     ex = summary * dec
-    extra = ex #/ np.sum(ex)
+    extra = ex
     return extra
 
 
@@ -213,9 +198,6 @@ def run():
     path1 = rospy.Publisher('path1', Float32, queue_size = 1)
     path2 = rospy.Publisher('path2', Float32, queue_size = 1)
     path3 = rospy.Publisher('path3', Float32, queue_size = 1)
-    dis1 = rospy.Publisher('dis1', Float32, queue_size = 1)
-    dis2 = rospy.Publisher('dis2', Float32, queue_size = 1)
-    dis3 = rospy.Publisher('dis3', Float32, queue_size = 1)
     term1 = rospy.Publisher('term1', Float32, queue_size = 1)
     term2 = rospy.Publisher('term2', Float32, queue_size = 1)
     term3 = rospy.Publisher('term3', Float32, queue_size = 1)
@@ -234,6 +216,8 @@ def run():
     state = 0
     wphi = 0.6  # angle weight
     wpath = 0.4  # path weight
+    maxA = 180
+    maxP = 25
     n = 3   # number of goals
     Delta = 0.2
     p = (1-P0)/(n-1) # rest of prior values in decay mode
@@ -337,13 +321,6 @@ def run():
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
 
-        measure = np.array([])
-        for x in targets:
-            dis = distance.euclidean(robot_coord, x)
-            measure = np.append(measure, dis)
-        dis = measure
-        rospy.loginfo("Distance: %s", dis)
-
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
 
@@ -352,20 +329,22 @@ def run():
         # Simply, e.g. if i choose to click around g2, then the euclidean between g2 and click is minimum
         # so g2 prior becomes greater than others ---->  decay function starts to be computed ---> BAYES with Decay
         check1 = distance.euclidean(g_prime, g1)
-        #rospy.loginfo("Check1: %s", check1)
-
         check2 = distance.euclidean(g_prime, g2)
-        #rospy.loginfo("Check2: %s", check2)
-
         check3 = distance.euclidean(g_prime, g3)
-        #rospy.loginfo("Check3: %s", check3)
-
         check = [check1, check2, check3]
+	# or
+	#check = []
+	#for i in targets:
+    	    #eucl = distance.euclidean(g, i)
+    	    #check.append(eucl)
+        #print(check)
         minimum = min(check)
 
         note = any(i<=value for i in check)
         if note and state == 0 and g_prime != g_prime_old:
             g_prime_old = g_prime
+
+            timing = 0
             state = 1
             rospy.loginfo("STATE - BAYES me decay")
 
@@ -573,9 +552,6 @@ def run():
             path1.publish(path[0])
             path2.publish(path[1])
             path3.publish(path[2])
-            dis1.publish(dis[0])
-            dis2.publish(dis[1])
-            dis3.publish(dis[2])
 	    term1.publish(term[0])
 	    term2.publish(term[1])
 	    term3.publish(term[2])
