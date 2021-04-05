@@ -16,6 +16,11 @@ from scipy.spatial import distance
 from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
+import matplotlib as mpl
+import matplotlib.pylab as pylab
+import matplotlib.pyplot as plt
+from matplotlib import style
+
 
 
 
@@ -41,6 +46,8 @@ path_length = 0
 check1 = 0
 check2 = 0
 check3 = 0
+check4 = 0
+check5 = 0
 state = 0
 
 
@@ -48,6 +55,8 @@ state = 0
 G1 = Point()
 G2 = Point()
 G3 = Point()
+G4 = Point()
+G5 = Point()
 
 Goal = PoseStamped()
 Start = PoseStamped()
@@ -100,22 +109,47 @@ def call(path_msg):
 
 
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi, maxA, maxP):
+def compute_like_BOIR(path, Angle, wpath, wphi, maxA, maxP):
      a = Angle / maxA
      p = path / maxP
      like = np.exp(-a/wphi) * np.exp(-p/wpath)
      return like
 
-# compute transition model
-def compute_cond(cond, prior):
-    sum = np.matmul(cond, prior.T)
+# compute conditional
+def compute_cond_BOIR(cond, prior_BOIR):
+    sum =  np.matmul(cond, prior_BOIR.T)
     return sum
 
-# compute posterior P(goal|Z) = normalized(Likelihood * transition)  # Normal BAYES
-def compute_post(likelihood, summary):
-    out2 = likelihood * summary
+# compute posterior P(goal|obs) = normalized(likelihood * conditional)
+def compute_post_BOIR(likelihood_BOIR, conditional_BOIR):
+    out2 = likelihood_BOIR * conditional_BOIR
     post = out2 / np.sum(out2)
     return post
+
+
+def compute_like_RBII(dis):
+     like = np.exp(-5*dis)
+     return like
+
+# compute conditional
+def compute_cond_RBII(cond, prior_RBII):
+    sum =  np.matmul(cond, prior_RBII.T)
+    return sum
+
+# compute posterior P(goal|obs) = normalized(likelihood * conditional)
+def compute_post_RBII(likelihood_RBII, conditional_RBII):
+    out2 = likelihood_RBII * conditional_RBII
+    post = out2 / np.sum(out2)
+    return post
+
+def compute_ECF(dis, term, k):
+    Cd = np.exp(-dis)
+    C8 = np.exp(((k*term) / 180) - k)
+    C = Cd * C8
+    C = C / np.sum(C)
+    return C
+
+
 
 # given desired initial-clicked probability=P0, time-window, and final-clicked probability=threshold
 # compute the parameters (slope, interY) of the appropriate linear decay function
@@ -126,36 +160,43 @@ def equation(P0, window, threshold):
     interY = P0
     return slope, interY
 
+
+
 # compute the linear decay function given the parameters ...
 # 1st loop (t=0) --> decay[] = prior[]
 # 2nd loop --> decay[] != prior
 # .....
 # prior[] takes the posterior's values AND decay[] takes normalized reduced values based on equation
-def compute_decay(n, timing, minimum, check1, check2, check3, slope, interY):
+def compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, slope, interY):
     rospy.loginfo("seconds: %s", timing)
     decay = interY - (slope * timing) # window = 10sec here means --> NEVER decay under 35%  = threshold !!!!!
     datadec = np.ones(n-1) * (1-decay)/(n-1)
     updated = datadec
     rest = (1-decay)/(n-1)
     if minimum == check1:
-        updated = np.array([decay, rest, rest])
+        updated = np.array([decay, rest, rest, rest, rest])
     elif minimum == check2:
-        updated = np.array([rest, decay, rest])
+        updated = np.array([rest, decay, rest, rest, rest])
+    elif minimum == check3:
+        updated = np.array([rest, rest, decay, rest, rest])
+    elif minimum == check4:
+        updated = np.array([rest, rest, rest, decay, rest])
     else:
-        updated = np.array([rest, rest, decay])
+        updated = np.array([rest, rest, rest, rest, decay])
+
     return updated
 
 
 # compute transition model   # BAYES with decay
 def extra_term(summary, dec):
     ex = summary * dec
-    extra = ex
+    extra = ex #/ np.sum(ex)
     return extra
 
 
 # compute posterior   # BAYES with decay
-def compute_final(likelihood, plus):
-    out = likelihood * plus
+def compute_final(likelihood_BOIR, plus):
+    out = likelihood_BOIR * plus
     poster = out / np.sum(out)
     return poster
 
@@ -171,37 +212,42 @@ def run():
     # Create a callable proxy to GetPlan service
     get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
 
-
-
     # create tf.TransformListener objects
     listener = tf.TransformListener()
     listenerNAV = tf.TransformListener()
     listener1 = tf.TransformListener()
     listener2 = tf.TransformListener()
     listener3 = tf.TransformListener()
-
+    listener4 = tf.TransformListener()
+    listener5 = tf.TransformListener()
 
     # Subscribers
     rob_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, call_rot)
     nav_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, call_nav)
     sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, call)
 
-
     # Publishers
     pub = rospy.Publisher('most_probable_goal', Float32, queue_size = 1)
     poster1 = rospy.Publisher('poster1', Float32, queue_size = 1)
     poster2 = rospy.Publisher('poster2', Float32, queue_size = 1)
     poster3 = rospy.Publisher('poster3', Float32, queue_size = 1)
+    poster4 = rospy.Publisher('poster4', Float32, queue_size = 1)
+    poster5 = rospy.Publisher('poster5', Float32, queue_size = 1)
     angle1 = rospy.Publisher('angle1', Float32, queue_size = 1)
     angle2 = rospy.Publisher('angle2', Float32, queue_size = 1)
     angle3 = rospy.Publisher('angle3', Float32, queue_size = 1)
+    angle4 = rospy.Publisher('angle4', Float32, queue_size = 1)
+    angle5 = rospy.Publisher('angle5', Float32, queue_size = 1)
     path1 = rospy.Publisher('path1', Float32, queue_size = 1)
     path2 = rospy.Publisher('path2', Float32, queue_size = 1)
     path3 = rospy.Publisher('path3', Float32, queue_size = 1)
+    path4 = rospy.Publisher('path4', Float32, queue_size = 1)
+    path5 = rospy.Publisher('path5', Float32, queue_size = 1)
     term1 = rospy.Publisher('term1', Float32, queue_size = 1)
     term2 = rospy.Publisher('term2', Float32, queue_size = 1)
     term3 = rospy.Publisher('term3', Float32, queue_size = 1)
-
+    term4 = rospy.Publisher('term4', Float32, queue_size = 1)
+    term5 = rospy.Publisher('term5', Float32, queue_size = 1)
 
 
     # initializations
@@ -218,18 +264,16 @@ def run():
     wpath = 0.4  # path weight
     maxA = 180
     maxP = 25
-    n = 3   # number of goals
+    n = 5   # number of goals
     Delta = 0.2
     p = (1-P0)/(n-1) # rest of prior values in decay mode
-
-
-
+    k = 10
+    x = np.arange(n)
 
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-    prior = data0
-
-
+    prior_BOIR = data0
+    prior_RBII = data0
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
     data_cpt = np.ones((n, n)) * (Delta / (n-1))
@@ -246,11 +290,13 @@ def run():
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
         g_prime = [x_nav, y_nav]  # CLICKED point - g'
-        g1 = [21.9794311523, -11.4826393127] #gleft
-        g2 = [21.3006038666, -17.3720340729] #gcenter
-        g3 = [4.67607975006, -20.1855487823] #gright
 
-        targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
+        g1 = [13.384099, -0.070828]
+        g2 = [23.11985, -1.370935]
+        g3 = [29.208362, -0.728264]
+        g4 = [27.863958, -6.041914]
+        g5 = [20.085504, -7.524883]
+        targets = [g1, g2, g3, g4, g5] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
 
 
 
@@ -285,6 +331,17 @@ def run():
         G3_msg.point.x = g3[0]
         G3_msg.point.y = g3[1]
 
+        G4_msg = PointStamped()
+        G4_msg.header.frame_id = "map"
+        G4_msg.header.stamp = rospy.Time(0)
+        G4_msg.point.x = g4[0]
+        G4_msg.point.y = g4[1]
+
+        G5_msg = PointStamped()
+        G5_msg.header.frame_id = "map"
+        G5_msg.header.stamp = rospy.Time(0)
+        G5_msg.point.x = g5[0]
+        G5_msg.point.y = g5[1]
 
 
         try:
@@ -294,6 +351,9 @@ def run():
             list1 = listener1.transformPoint("/base_link", G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
             list2 = listener2.transformPoint("/base_link", G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
             list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
+            list4 = listener4.transformPoint("/base_link", G4_msg)
+            list5 = listener5.transformPoint("/base_link", G5_msg)
+
 
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
 
@@ -314,12 +374,21 @@ def run():
         g1_new = [list1.point.x, list1.point.y]
         g2_new = [list2.point.x, list2.point.y]
         g3_new = [list3.point.x, list3.point.y]
-
+        g4_new = [list4.point.x, list4.point.y]
+        g5_new = [list5.point.x, list5.point.y]
 
 
         # list of FIRST set of goals (ROBOT FRAME)
-        new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
+        new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1], g5_new[0], g5_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
+
+        # it is needed just for saving the values
+        measure = np.array([])
+        for z in targets:
+            dis = distance.euclidean(robot_coord, z)
+            measure = np.append(measure, dis)
+        dis = measure
+
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
 
@@ -331,7 +400,9 @@ def run():
         check1 = distance.euclidean(g_prime, g1)
         check2 = distance.euclidean(g_prime, g2)
         check3 = distance.euclidean(g_prime, g3)
-        check = [check1, check2, check3]
+        check4 = distance.euclidean(g_prime, g4)
+        check5 = distance.euclidean(g_prime, g5)
+        check = [check1, check2, check3, check4, check5]
 	# or
 	#check = []
 	#for i in targets:
@@ -346,21 +417,26 @@ def run():
 
             timing = 0
             state = 1
-            rospy.loginfo("state - AIRM active")
+            # rospy.loginfo("STATE - BAYES me decay")
 
             if minimum == check1:
-                prior = np.array([P0, p, p])
+                prior = np.array([P0, p, p, p, p])
             elif minimum == check2:
-                prior = np.array([p, P0, p])
+                prior = np.array([p, P0, p, p, p])
+            elif minimum == check3:
+                prior = np.array([p, p, P0, p, p])
+            elif minimum == check4:
+                prior = np.array([p, p, p, P0, p])
             else:
-                prior = np.array([p, p, P0])
+                prior = np.array([p, p, p, p, P0])
 
 
             while (timing < window) and (g_prime == g_prime_old):
                 g_prime = [x_nav, y_nav]  # CLICKED point - g'
-                # decay function starts to be computed
 
-                # rospy.loginfo("STATE - BAYES me decay")
+
+                # decay function starts to be computed
+                rospy.loginfo("state - AIRM active")
 
                 # rospy.loginfo("prior: %s", prior)
 
@@ -370,9 +446,9 @@ def run():
                 # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
                 robot_base = [0, 0]
 
-                # if n=3 ..
-                ind_pos_x = [0, 2, 4]
-                ind_pos_y = [1, 3, 5]
+                # if n=5 ..
+                ind_pos_x = [0, 2, 4, 6, 8]
+                ind_pos_y = [1, 3, 5, 7, 9]
 
 
                 dx = new - robot_base[0]
@@ -390,7 +466,6 @@ def run():
                 # generate plan towards goals --> n-path lengths .. (2nd Observation)
                 length = np.array([])
                 for j in targets:
-
                     Start = PoseStamped()
                     Start.header.seq = 0
                     Start.header.frame_id = "map"
@@ -410,7 +485,7 @@ def run():
                     srv.goal = Goal
                     srv.tolerance = 0.5
                     resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                    rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
+                    rospy.sleep(0.04) # 0.04 x 5 = 0.20 sec
 
                     length = np.append(length, path_length)
                 path = length
@@ -427,36 +502,72 @@ def run():
                 # rospy.loginfo("slope: %s", slope)
                 # rospy.loginfo("interY %s", interY)
 
-                likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
-                dec = compute_decay(n, timing, minimum, check1, check2, check3, slope, interY)
+                likelihood_BOIR = compute_like_BOIR(path, Angle, wpath, wphi, maxA, maxP)
+                dec = compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, slope, interY)
 
-                summary = compute_cond(cond, prior)
+                summary = compute_cond_BOIR(cond, prior_BOIR)
 
                 # what posterior trully is with extra term
                 plus = extra_term(summary, dec)
-                posterior = compute_final(likelihood, plus)
+                posterior_BOIR = compute_final(likelihood_BOIR, plus)
+                index_BOIR = np.argmax(posterior_BOIR)
+                prior_BOIR = posterior_BOIR
 
-                index = np.argmax(posterior)
-                prior = posterior
+                likelihood_RBII = compute_like_RBII(dis)
+                conditional_RBII = compute_cond_RBII(cond, prior_RBII)
+                posterior_RBII = compute_post_RBII(likelihood_RBII, conditional_RBII)
+                index_RBII = np.argmax(posterior_RBII)
+                prior_RBII = posterior_RBII
+
+                ecf = compute_ECF(dis, term, k)
+                index_ecf = np.argmax(ecf)
+                # print(ecf)
+
+
+
+                barWidth = 0.2
+                r2 = [i + barWidth for i in x]
+                r3 = [i + barWidth for i in r2]
+
+                plt.bar(x, posterior_BOIR, width=barWidth, color="aqua", label='BOIR-AIRM')
+                plt.bar(r2, posterior_RBII, width=barWidth, color="steelblue", label='RBII-1')
+                plt.bar(r3, ecf, width=barWidth, color="blue", label='ECF')
+                plt.title('Probability Mass Function', fontweight='bold')
+                plt.xlabel('Goals in Scenario 4', fontweight='bold')
+                plt.ylabel('belief/posterior value', fontweight='bold')
+                plt.xticks([q + barWidth for q in range(n)], ['Goal1', 'Goal2', 'Goal3', 'Goal4', 'Goal5'])
+                plt.ylim((0, 1))
+                plt.yticks(np.arange(0, 1, 0.1))
+                plt.legend(loc=9, prop={'size': 11})
+                plt.draw()
+                plt.pause(0.01)
+                plt.clf()
 
     # BAYES' FILTER with Decay------------------------------------------------
 
 
                 # print ...
                 #rospy.loginfo("rotate: %s", yaw_degrees)
-                #rospy.loginfo("len: %s", path)
-                #rospy.loginfo("Angles: %s", Angle)
-                rospy.loginfo("AIRM decay: %s", dec)
-                rospy.loginfo("POSTERIOR: %s", posterior)
-                rospy.loginfo("Potential Goal is %s", index+1)
+                # rospy.loginfo("len: %s", path)
+                # rospy.loginfo("Angles: %s", Angle)
+                rospy.loginfo("AIRM decay probabilities: %s", dec)
+                # rospy.loginfo("POSTERIOR: %s", posterior)
+                # rospy.loginfo("Potential Goal is %s", index+1)
+                rospy.loginfo("Recognized goal with BOIR-AIRM : %s", index_BOIR+1)
+                rospy.loginfo("Recognized goal with RBII : %s", index_RBII+1)
+                rospy.loginfo("Recognized goal with ECF : %s", index_ecf+1)
+                print('-------------------------------------------------------')
 
                 timing = timing + 1
-                rospy.sleep(0.15)
+                #rospy.sleep(0.25)
 
 
-                pub.publish(index+1)
+                # pub.publish(index+1)
             else:
                 state = 0
+
+
+
 
 
         else:
@@ -474,9 +585,9 @@ def run():
             # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
             robot_base = [0, 0]
 
-            # if n=3 ..
-            ind_pos_x = [0, 2, 4]
-            ind_pos_y = [1, 3, 5]
+            # if n=7 ..
+            ind_pos_x = [0, 2, 4, 6, 8]
+            ind_pos_y = [1, 3, 5, 7, 9]
 
 
             dx = new - robot_base[0]
@@ -513,7 +624,7 @@ def run():
                 srv.goal = Goal
                 srv.tolerance = 0.5
                 resp = get_plan(srv.start, srv.goal, srv.tolerance)
-                rospy.sleep(0.05) # 0.05 x 3 = 0.15 sec
+                rospy.sleep(0.04) # 0.04 x 5 = 0.20 sec
 
                 length = np.append(length, path_length)
             path = length
@@ -522,39 +633,85 @@ def run():
 
     # BAYES' FILTER ------------------------------------------------
 
-            likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
-            conditional = compute_cond(cond, prior)
-            posterior = compute_post(likelihood, conditional)
-            index = np.argmax(posterior)
-            prior = posterior
+            likelihood_BOIR = compute_like_BOIR(path, Angle, wpath, wphi, maxA, maxP)
+            conditional_BOIR = compute_cond_BOIR(cond, prior_BOIR)
+            posterior_BOIR = compute_post_BOIR(likelihood_BOIR, conditional_BOIR)
+            index_BOIR = np.argmax(posterior_BOIR)
+            prior_BOIR = posterior_BOIR
+
+            likelihood_RBII = compute_like_RBII(dis)
+            conditional_RBII = compute_cond_RBII(cond, prior_RBII)
+            posterior_RBII = compute_post_RBII(likelihood_RBII, conditional_RBII)
+            index_RBII = np.argmax(posterior_RBII)
+            prior_RBII = posterior_RBII
+
+            ecf = compute_ECF(dis, term, k)
+            index_ecf = np.argmax(ecf)
+            # print(ecf)
+
+            barWidth = 0.2
+            r2 = [i + barWidth for i in x]
+            r3 = [i + barWidth for i in r2]
+
+            plt.bar(x, posterior_BOIR, width=barWidth, color="aqua", label='BOIR')
+            plt.bar(r2, posterior_RBII, width=barWidth, color="steelblue", label='RBII-1')
+            plt.bar(r3, ecf, width=barWidth, color="blue", label='ECF')
+            plt.title('Probability Mass Function', fontweight='bold')
+            plt.xlabel('Goals in Scenario 4', fontweight='bold')
+            plt.ylabel('belief/posterior value', fontweight='bold')
+            plt.xticks([q + barWidth for q in range(n)], ['Goal1', 'Goal2', 'Goal3', 'Goal4', 'Goal5'])
+            plt.ylim((0, 1))
+            plt.yticks(np.arange(0, 1, 0.1))
+            plt.legend(loc=9, prop={'size': 11})
+            plt.draw()
+            plt.pause(0.01)
+            plt.clf()
 
     # BAYES' FILTER ------------------------------------------------
 
 
             # print ...
             #rospy.loginfo("rotate: %s", yaw_degrees)
-            #rospy.loginfo("len: %s", path)
-            #rospy.loginfo("Angles: %s", Angle)
+            # rospy.loginfo("len: %s", path)
+            # rospy.loginfo("Angles: %s", Angle)
+            # rospy.loginfo("Posterior: %s", posterior)
+            # rospy.loginfo("Potential Goal is %s", index+1)
+            rospy.loginfo("Recognized goal with BOIR : %s", index_BOIR+1)
+            rospy.loginfo("Recognized goal with RBII : %s", index_RBII+1)
+            rospy.loginfo("Recognized goal with ECF : %s", index_ecf+1)
+            print('-------------------------------------------------------')
 
-            rospy.loginfo("Posterior: %s", posterior)
-            rospy.loginfo("Potential Goal is %s", index+1)
 
 
-
-
-            pub.publish(index+1)
-            poster1.publish(posterior[0])
-            poster2.publish(posterior[1])
-            poster3.publish(posterior[2])
+            # pub.publish(index+1)
+            # poster1.publish(posterior_BOIR[0])
+            # poster2.publish(posterior_BOIR[1])
+            # poster3.publish(posterior_[2])
+            # poster4.publish(posterior[3])
+            # poster5.publish(posterior[4])
             angle1.publish(Angle[0])
             angle2.publish(Angle[1])
             angle3.publish(Angle[2])
+            angle4.publish(Angle[3])
+            angle5.publish(Angle[4])
             path1.publish(path[0])
             path2.publish(path[1])
             path3.publish(path[2])
+            path4.publish(path[3])
+            path5.publish(path[4])
+            # dis1.publish(dis[0])
+            # dis2.publish(dis[1])
+            # dis3.publish(dis[2])
+            # dis4.publish(dis[3])
+            # dis5.publish(dis[4])
 	    term1.publish(term[0])
 	    term2.publish(term[1])
 	    term3.publish(term[2])
+	    term4.publish(term[3])
+	    term5.publish(term[4])
+
+
+
 
 
 

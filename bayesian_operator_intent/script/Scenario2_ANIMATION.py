@@ -16,6 +16,10 @@ from scipy.spatial import distance
 from std_msgs.msg import Float32
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
+import matplotlib as mpl
+import matplotlib.pylab as pylab
+import matplotlib.pyplot as plt
+from matplotlib import style
 
 
 x_robot = 0.0
@@ -93,24 +97,48 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi, maxA, maxP):
+def compute_like_BOIR(path, Angle, wpath, wphi, maxA, maxP):
      a = Angle / maxA
      p = path / maxP
      like = np.exp(-a/wphi) * np.exp(-p/wpath)
      return like
 
 # compute conditional
-def compute_cond(cond, prior):
-    sum =  np.matmul(cond, prior.T)
+def compute_cond_BOIR(cond, prior_BOIR):
+    sum =  np.matmul(cond, prior_BOIR.T)
     return sum
 
 # compute posterior P(goal|obs) = normalized(likelihood * conditional)
-def compute_post(likelihood, conditional):
-    out2 = likelihood * conditional
+def compute_post_BOIR(likelihood_BOIR, conditional_BOIR):
+    out2 = likelihood_BOIR * conditional_BOIR
     post = out2 / np.sum(out2)
     return post
 
+
+def compute_like_RBII(dis):
+     like = np.exp(-5.5*dis)
+     return like
+
+# compute conditional
+def compute_cond_RBII(cond, prior_RBII):
+    sum =  np.matmul(cond, prior_RBII.T)
+    return sum
+
+# compute posterior P(goal|obs) = normalized(likelihood * conditional)
+def compute_post_RBII(likelihood_RBII, conditional_RBII):
+    out2 = likelihood_RBII * conditional_RBII
+    post = out2 / np.sum(out2)
+    return post
+
+def compute_ECF(dis, term, k):
+    Cd = np.exp(-dis)
+    C8 = np.exp(((k*term) / 180) - k)
+    C = Cd * C8
+    C = C / np.sum(C)
+    return C
+
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
+
 
 
 
@@ -153,13 +181,15 @@ def run():
     wpath = 0.4
     maxA = 180
     maxP = 25
-    n = 3   # number of total goals (prime+subgoals)
+    n = 3   # number of goals
     Delta = 0.2
-    
+    k = 10
+    x = np.arange(n)
 
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
-    prior = data0
+    prior_BOIR = data0
+    prior_RBII = data0
 
     # creation of Conditional Probability Table 'nxn' according to goals & Delta
     data_cpt = np.ones((n, n)) * (Delta / (n-1))
@@ -175,14 +205,11 @@ def run():
 
         # robot coordinates (MAP FRAME)
         robot_coord = [x_robot, y_robot]
-
-        # as husky sees
-        g1 = [24.4425258636, 12.7283153534] #gleft
-        g2 = [29.08319664, 12.852309227] #gcenter = HUMAN
-        g3 = [33.7569503784, 12.5955343246] #gright
+        g1 = [4.60353183746, -13.2964735031] #gleft
+        g2 = [6.86671924591, -9.13561820984] #gcenter
+        g3 = [4.69921255112, -4.81423997879] #gright
 
         targets = [g1, g2, g3] # list of FIRST set of goals (MAP FRAME) --> useful for euclidean distance
-
 
 
 
@@ -239,10 +266,16 @@ def run():
         g3_new = [list3.point.x, list3.point.y]
 
 
-
         # list of FIRST set of goals (ROBOT FRAME)
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list
         new = np.array(new_goals) # array --> useful for angle computation
+
+        # it is needed just for saving the values
+        measure = np.array([])
+        for z in targets:
+            dis = distance.euclidean(robot_coord, z)
+            measure = np.append(measure, dis)
+        dis = measure
 
 
 # -------------------------------------------------- T R A N S F O R M A T I O N S --------------------------------------------------------------- #
@@ -268,6 +301,7 @@ def run():
 
 	term = 180 - abs(rot-Angle)
 # 1st OBSERVATION -------------------------------------------------------------------------
+
 
 
 # 2nd OBSERVATION -------------------------------------------------------------------------
@@ -301,30 +335,67 @@ def run():
 # 2nd OBSERVATION -------------------------------------------------------------------------
 
 
-# BAYES' FILTER ----------------------------------------------------------------------
-        likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
-        conditional = compute_cond(cond, prior)
-        posterior = compute_post(likelihood, conditional)
-        index = np.argmax(posterior)
-        prior = posterior
 
 # BAYES' FILTER ----------------------------------------------------------------------
 
+        likelihood_BOIR = compute_like_BOIR(path, Angle, wpath, wphi, maxA, maxP)
+        conditional_BOIR = compute_cond_BOIR(cond, prior_BOIR)
+        posterior_BOIR = compute_post_BOIR(likelihood_BOIR, conditional_BOIR)
+        index_BOIR = np.argmax(posterior_BOIR)
+        prior_BOIR = posterior_BOIR
+
+        likelihood_RBII = compute_like_RBII(dis)
+        conditional_RBII = compute_cond_RBII(cond, prior_RBII)
+        posterior_RBII = compute_post_RBII(likelihood_RBII, conditional_RBII)
+        index_RBII = np.argmax(posterior_RBII)
+        prior_RBII = posterior_RBII
+
+        ecf = compute_ECF(dis, term, k)
+        index_ecf = np.argmax(ecf)
+        # print(ecf)
+
+# BAYES' FILTER ----------------------------------------------------------------------
+        # bars = ('g1', 'g2', 'g3')
+
+        barWidth = 0.2
+        r2 = [i + barWidth for i in x]
+        r3 = [i + barWidth for i in r2]
+        # print(posterior_BOIR)
+        # print(posterior_RBII)
+        plt.bar(x, posterior_BOIR, width=barWidth, color="aqua", label='BOIR')
+        plt.bar(r2, posterior_RBII, width=barWidth, color="steelblue", label='RBII-1')
+        plt.bar(r3, ecf, width=barWidth, color="blue", label='ECF')
+        plt.title('Probability Mass Function', fontweight='bold')
+        plt.xlabel('Goals in Scenario 2', fontweight='bold')
+        plt.ylabel('belief/posterior value', fontweight='bold')
+        # plt.xticks(x, bars)
+        plt.xticks([q + barWidth for q in range(n)], ['Goal1', 'Goal2', 'Goal3'])
+        plt.ylim((0, 1))
+        plt.yticks(np.arange(0, 1, 0.1))
+        # plt.legend()
+        plt.legend(loc=2, prop={'size': 13})
+        plt.draw()
+        plt.pause(0.01)
+        plt.clf()
 
 
         # print ...
         #rospy.loginfo("rotate: %s", yaw_degrees)
-        rospy.loginfo("len: %s", path)
-        rospy.loginfo("Angles: %s", Angle)
-        rospy.loginfo("Posterior: %s", posterior)
-        rospy.loginfo("Potential Goal is %s", index+1)
+        # rospy.loginfo("len: %s", path)
+        # rospy.loginfo("Angles: %s", Angle)
+        # rospy.loginfo("Posterior: %s", posterior)
+        # rospy.loginfo("Potential Goal is %s", index+1)
+        rospy.loginfo("Recognized goal with BOIR : %s", index_BOIR+1)
+        rospy.loginfo("Recognized goal with RBII : %s", index_RBII+1)
+        rospy.loginfo("Recognized goal with ECF : %s", index_ecf+1)
+        print('-------------------------------------------------------')
 
 
 
-        pub.publish(index+1)
-        poster1.publish(posterior[0])
-        poster2.publish(posterior[1])
-        poster3.publish(posterior[2])
+        # pub.publish(index+1)
+        # poster1.publish(posterior[0])
+        # poster2.publish(posterior[1])
+        # poster3.publish(posterior[2])
         angle1.publish(Angle[0])
         angle2.publish(Angle[1])
         angle3.publish(Angle[2])
@@ -334,6 +405,7 @@ def run():
 	term1.publish(term[0])
 	term2.publish(term[1])
 	term3.publish(term[2])
+
 
 
 

@@ -2,7 +2,7 @@
 #from __future__ import division, print_function
 
 
-# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation. 
+# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation.
 import rospy
 import numpy as np
 import random
@@ -93,11 +93,11 @@ def call(path_msg):
 # -------------------------------------------------- F U N C T I O N S --------------------------------------------------------------- #
 
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi):
+def compute_like(path, Angle, wpath, wphi, maxA, maxP):
      a = Angle / maxA
      p = path / maxP
      like = np.exp(-a/wphi) * np.exp(-p/wpath)
-     return like 
+     return like
 
 
 # compute conditional
@@ -159,7 +159,7 @@ def run():
     maxP = 25
     n = 3   # number of goals
     Delta = 0.2
-    k = 2
+
 
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
@@ -305,7 +305,7 @@ def run():
 
 # BAYES' FILTER ----------------------------------------------------------------------
 
-        likelihood = compute_like(path, Angle, wpath, wphi)
+        likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
         conditional = compute_cond(cond, prior)
         posterior = compute_post(likelihood, conditional)
         index = np.argmax(posterior)

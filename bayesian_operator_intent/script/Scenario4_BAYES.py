@@ -2,7 +2,7 @@
 #from __future__ import division, print_function
 
 
-# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation. 
+# This script estimates the operator's intent (i.e. most probable goal) using Recursive Bayesian Estimation.
 import rospy
 import numpy as np
 import random
@@ -105,7 +105,7 @@ def call(path_msg):
 
 
 # compute likelihood
-def compute_like(path, Angle, wpath, wphi):
+def compute_like(path, Angle, wpath, wphi, maxA, maxP):
      a = Angle / maxA
      p = path / maxP
      like = np.exp(-a/wphi) * np.exp(-p/wpath)
@@ -229,21 +229,21 @@ def run():
     # initializations
     P0 = 0.95
     window = 10
-    threshold = 0.25
+    threshold = 0.35
     g_prime_old = 0
     timing = 0
     minimum = 0
     value = 4
     index = 0
     state = 0
-    wphi = 0.65  # angle weight
-    wpath = 0.35  # path weight
+    wphi = 0.6  # angle weight
+    wpath = 0.4  # path weight
     maxA = 180
     maxP = 25
     n = 5   # number of goals
     Delta = 0.2
     p = (1-P0)/(n-1) # rest of prior values in decay mode
-    k = 2
+
 
     # Initialize Prior-beliefs according to goals' number
     data0 = np.ones(n) * 1/n   # P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33
@@ -384,7 +384,7 @@ def run():
 
             timing = 0
             state = 1
-            rospy.loginfo("STATE - BAYES me decay")
+            rospy.loginfo("state - AIRM active")
 
             if minimum == check1:
                 prior = np.array([P0, p, p, p, p])
@@ -398,14 +398,14 @@ def run():
                 prior = np.array([p, p, p, p, P0])
 
 
-            while (timing < 10) and (g_prime == g_prime_old):
+            while (timing < window) and (g_prime == g_prime_old):
                 g_prime = [x_nav, y_nav]  # CLICKED point - g'
 
 
                 # decay function starts to be computed
-                rospy.loginfo("STATE - BAYES me decay")
+                # rospy.loginfo("state - AIRM active")
 
-                rospy.loginfo("prior: %s", prior)
+                # rospy.loginfo("prior: %s", prior)
 
 
 
@@ -466,10 +466,10 @@ def run():
 
                 # compute parameter's decay equation
                 [slope, interY] = equation(P0, window, threshold)
-                rospy.loginfo("slope: %s", slope)
-                rospy.loginfo("interY %s", interY)
+                # rospy.loginfo("slope: %s", slope)
+                # rospy.loginfo("interY %s", interY)
 
-                likelihood = compute_like(path, Angle, wpath, wphi)
+                likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
                 dec = compute_decay(n, timing, minimum, check1, check2, check3, check4, check5, slope, interY)
 
                 summary = compute_cond(cond, prior)
@@ -486,14 +486,14 @@ def run():
 
                 # print ...
                 #rospy.loginfo("rotate: %s", yaw_degrees)
-                rospy.loginfo("len: %s", path)
-                rospy.loginfo("Angles: %s", Angle)
-                rospy.loginfo("decay: %s", dec)
+                # rospy.loginfo("len: %s", path)
+                # rospy.loginfo("Angles: %s", Angle)
+                rospy.loginfo("AIRM decay: %s", dec)
                 rospy.loginfo("POSTERIOR: %s", posterior)
                 rospy.loginfo("Potential Goal is %s", index+1)
 
                 timing = timing + 1
-                #rospy.sleep(0.25)
+                # rospy.sleep(0.15)
 
 
                 pub.publish(index+1)
@@ -509,9 +509,9 @@ def run():
             timing = 0
             state = 0
 
-            rospy.loginfo("STATE - BAYES normal")
+            rospy.loginfo("state - AIRM inactive")
 
-            rospy.loginfo("Prior: %s", prior)
+            # rospy.loginfo("Prior: %s", prior)
 
 
 
@@ -567,7 +567,7 @@ def run():
 
     # BAYES' FILTER ------------------------------------------------
 
-            likelihood = compute_like(path, Angle, wpath, wphi)
+            likelihood = compute_like(path, Angle, wpath, wphi, maxA, maxP)
             conditional = compute_cond(cond, prior)
             posterior = compute_post(likelihood, conditional)
             index = np.argmax(posterior)
@@ -578,8 +578,8 @@ def run():
 
             # print ...
             #rospy.loginfo("rotate: %s", yaw_degrees)
-            rospy.loginfo("len: %s", path)
-            rospy.loginfo("Angles: %s", Angle)
+            # rospy.loginfo("len: %s", path)
+            # rospy.loginfo("Angles: %s", Angle)
             rospy.loginfo("Posterior: %s", posterior)
             rospy.loginfo("Potential Goal is %s", index+1)
 
@@ -601,18 +601,14 @@ def run():
             path3.publish(path[2])
             path4.publish(path[3])
             path5.publish(path[4])
-            dis1.publish(dis[0])
-            dis2.publish(dis[1])
-            dis3.publish(dis[2])
-            dis4.publish(dis[3])
-            dis5.publish(dis[4])
+
 	    term1.publish(term[0])
 	    term2.publish(term[1])
 	    term3.publish(term[2])
 	    term4.publish(term[3])
 	    term5.publish(term[4])
 
-         
+
 
 
 
