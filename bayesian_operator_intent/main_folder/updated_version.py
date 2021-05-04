@@ -28,6 +28,8 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 import time
 
 
+# -------------------------- ROS-based FUNCTIONS -------------------------- #
+
 # callback function for robot's coordinates (MAP FRAME)
 def call_robot(message):
     global x_robot, y_robot, qx, qy, qz, qw
@@ -88,6 +90,8 @@ def get_processed_goals():
     return new
 
 
+# --------------------------  FUNCTIONS -------------------------- #
+
 def calculate_distance():
     robot_coord = [x_robot, y_robot]  # robot coordinates (MAP FRAME) they are given through call_robot callback
     measure = np.array([])
@@ -139,7 +143,7 @@ def calculate_angle():
     Angle = abs(angles)
     return Angle
 
-# BAYES: step 1
+# BAYES: step 1   ~ take two observations into account (Angle & Path)
 def compute_likelihood():
     a = Angle / maxA
     p = path / maxP
@@ -172,7 +176,7 @@ if __name__=='__main__':
         listener2 = tf.TransformListener()
         listener3 = tf.TransformListener()
 
-        # --------------------------- Initialize parameters --------------------------- #
+        # --------------------------- INITIALIZE PARAMETERS --------------------------- #
         g1 = [24.4425258636, 12.7283153534] # g left  (known a-priori)
         g2 = [29.08319664, 12.852309227]    # g center = HUMAN  (known a-priori)
         g3 = [33.7569503784, 12.5955343246] # g right  (known a-priori)
@@ -188,7 +192,7 @@ if __name__=='__main__':
         n_goals = 3          # number of total goals
         Delta = 0.2          # factor that determines CPT below
 
-        # --------------------------- Initialize Prior belief and CPT --------------------------- #
+        # --------------------------- INITIALIZE 'PRIOR BELIEF' & 'CPT' --------------------------- #
         prior = np.ones(n_goals) * 1/n_goals   # Initialize Prior-beliefs according to goals' number (e.g. P(g1)=0.33 , P(g2)=0.33, P(g3)=0.33  )
         data_cpt = np.ones((n_goals, n_goals)) * (Delta / (n_goals-1))
         np.fill_diagonal(data_cpt, 1-Delta)
@@ -196,6 +200,8 @@ if __name__=='__main__':
 
         done = rospy.is_shutdown()
         rate = rospy.Rate(4)
+
+# -------------------------------  MAIN LOOP ------------------------------- #
         while not done:
             start_time = time.time()  # is used to give us loop's execution time
             G1_msg, G2_msg, G3_msg = getPrepared()  # prepare goals for transformation
@@ -206,13 +212,16 @@ if __name__=='__main__':
                 list3 = listener3.transformPoint("/base_link", G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
+
+            # --------------------------  GET USEFUL OBSERVATIONS  -------------------------- #
             new = get_processed_goals()      # get the new goals (i.e. new coordinates) in ROBOT FRAME
             Distance = calculate_distance()  # get Euclidean distance between robot and each goal (~optional)
             path = calculate_path()          # get path distance between robot and each goal
             Angle = calculate_angle()        # get angle between robot and each goal
 
+            # --------------------------  PERFORM BAYESIAN ESTIMATION STEPS -------------------------- #
             #rospy.loginfo("prior: %s", prior)  # in the first iteration should be 1/n_goals (e.g. if n_goals=3 then prior = [0.33, 0.33, 0.33])
-            likelihood = compute_likelihood()  # get likelihood P(Z|g) where Z[angle, path] and for each goal g
+            likelihood = compute_likelihood()  # get likelihood P(Z|g) where Z[angle, path] for each goal g
             summary = compute_conditional()    # get result from CPT and prior belief
             posterior = compute_posterior()    # get posterior belief P(g|Z)
             index = np.argmax(posterior)       # get the most probable goal
