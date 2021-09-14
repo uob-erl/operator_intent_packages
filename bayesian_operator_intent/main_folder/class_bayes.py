@@ -1,7 +1,21 @@
 #!/usr/bin/env python
 #from __future__ import division, print_function
 
+'''
+Copyright (c) 2020-2021, Dimitris Panagopoulos
+All rights reserved.
+----------------------------------------------------
+This script predicts/estimates/recognizes human operator's intent (i.e. most probable goal that operator are advancing
+towards) using Bayesian calculus. The method presented here called BOIR (Bayesian Operator Intent Recognition)
+and is part of the paper got published in IEEE SMC 2021, Melbourne, Australia, 17-20 October 2021
 
+Panagopoulos, D. et al. (2021). "A Bayesian-Based Approach to Human Operator Intent Recognition in Remote Mobile Navigation". Manuscript has been accepted
+for publication in 2021 IEEE International Conference on Systems, Man and Cybernetics (SMC)
+
+It's the latest, most up-to-date file/script in the form of python Class providing the ability to be conveyed to future work !
+
+Check the details on README.md to learn more about the research and the experiment's nature.
+'''
 import rospy
 import numpy as np
 import random
