@@ -7,9 +7,12 @@ Here is a better representation/version of the implementation. Each step of the 
 PROCESS: [ initializations -> prepare goals for transformation(function) -> get the new goals coordinates(function) -> get distance,path,angle(3 functions) ->
 -> get BAYES estimation(3 functions) -> publish the most_probable_goal = INTENT ]
 
-TODO: -- a class for BAYES similar to scripts I've created for offline computation&evaluation based on the extracted data texts of rosbags
+TODO(done): -- a class for BAYES similar to scripts I've created for offline computation&evaluation based on the extracted data texts of rosbags
       -- remove unnecessary imports
       -- minor changes to the code for being more flexible and attractive
+
+alternative (back up) script for BOIR if anything goes wrong in 'main.py'
+and 'class_bayes.py'
 '''
 
 import rospy

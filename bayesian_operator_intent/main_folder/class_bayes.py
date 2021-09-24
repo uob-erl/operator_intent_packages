@@ -32,7 +32,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 import time
 
 class Bayes(object):
-    def __init__(self):
+    def __init__(self, g1, g2, g3):  # or def __init__(self, g1, g2, g3, g4, g5):
         rospy.init_node('BayesianEstimationClass_BOIR')
         self.rate = rospy.Rate(4)
         self.done = rospy.is_shutdown()
@@ -40,9 +40,13 @@ class Bayes(object):
         self.listener1 = tf.TransformListener()
         self.listener2 = tf.TransformListener()
         self.listener3 = tf.TransformListener()
+        self.listener4 = tf.TransformListener()
+        self.listener5 = tf.TransformListener()
         self.G1_msg = PointStamped()
         self.G2_msg = PointStamped()
         self.G3_msg = PointStamped()
+        # self.G4_msg = PointStamped()
+        # self.G5_msg = PointStamped()
         self.get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
         self.sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, self.call_len)
         self.robot_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.call_robot)
@@ -50,10 +54,13 @@ class Bayes(object):
         self.path_length = 0
         self.x_robot = 0
         self.y_robot = 0
-        self.g1 = [19.04143524, 9.39682674]
-        self.g2 = [26.1866455, 9.15536022]
-        self.g3 = [25.09380531, -2.8331837]
+        self.g1 = g1
+        self.g2 = g2
+        self.g3 = g3
+        # self.g4 = g4
+        # self.g5 = g5
         self.targets = [self.g1, self.g2, self.g3]
+        # self.targets = [self.g1, self.g2, self.g3, self.g4, self.g5]
         self.robot_base = [0, 0]
         self.robot_map = None
         self.wA = 0.6             # weighting factor for Angle
@@ -69,7 +76,6 @@ class Bayes(object):
 
 # --------------------------------- C A L L B A C K S --------------------------------- #
     def call_robot(self, message):
-        #global x_robot, y_robot
         self.x_robot = message.pose.pose.position.x
         self.y_robot = message.pose.pose.position.y
         self.robot_map = [self.x_robot, self.y_robot]
@@ -104,6 +110,18 @@ class Bayes(object):
         self.G3_msg.header.stamp = rospy.Time(0)
         self.G3_msg.point.x = self.g3[0]
         self.G3_msg.point.y = self.g3[1]
+        # # prepare transformation from g4(MAP FRAME) to g4 -> g4_new(ROBOT FRAME)
+        # self.G4_msg = PointStamped()
+        # self.G4_msg.header.frame_id = "map"
+        # self.G4_msg.header.stamp = rospy.Time(0)
+        # self.G4_msg.point.x = self.g4[0]
+        # self.G4_msg.point.y = self.g4[1]
+        # # prepare transformation from g5(MAP FRAME) to g5 -> g5_new(ROBOT FRAME)
+        # self.G5_msg = PointStamped()
+        # self.G5_msg.header.frame_id = "map"
+        # self.G5_msg.header.stamp = rospy.Time(0)
+        # self.G5_msg.point.x = self.g5[0]
+        # self.G5_msg.point.y = self.g5[1]
 
     def processed_goals(self):
         orientation_list = self.rotation  # convert from quaternion to RPY (the yaw of the robot in /map frame)
@@ -113,9 +131,11 @@ class Bayes(object):
         g1_new = [self.list1.point.x, self.list1.point.y]  # NEW coordinates' goals after transformations (ROBOT FRAME)
         g2_new = [self.list2.point.x, self.list2.point.y]  #  -//-
         g3_new = [self.list3.point.x, self.list3.point.y]  #  -//-
+        # g4_new = [self.list4.point.x, self.list4.point.y]  #  -//-
+        # g5_new = [self.list5.point.x, self.list5.point.y]  #  -//-
         new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1]] # list of set of goals (ROBOT FRAME)
+        # new_goals = [g1_new[0], g1_new[1], g2_new[0], g2_new[1], g3_new[0], g3_new[1], g4_new[0], g4_new[1], g5_new[0], g5_new[1]] # list of set of goals (ROBOT FRAME)
         self.new = np.array(new_goals) # array --> useful for angle computation
-        #print(self.new)
 
     # def calc_distance(self):
     #     measure = np.array([])
@@ -131,13 +151,15 @@ class Bayes(object):
         # if n=3 ..
         ind_pos_x = [0, 2, 4]
         ind_pos_y = [1, 3, 5]
+        # # if n=5 ..
+        # ind_pos_x = [0, 2, 4, 6, 8]
+        # ind_pos_y = [1, 3, 5, 7, 9]
         dx = self.new - self.robot_base[0]
         dy = self.new - self.robot_base[1]
         Dx = dx[ind_pos_x]
         Dy = dx[ind_pos_y]
         angles = np.arctan2(Dy, Dx) * 180 / np.pi
         self.Angle = abs(angles)
-        #print('angles', self.Angle)
 
     def calc_path(self):
         self.length = np.array([])
@@ -170,9 +192,9 @@ class Bayes(object):
         a = self.Angle / self.maxA
         p = self.length / self.maxP
         self.c_l = np.exp(-a / self.wA) * np.exp(-p / self.wP)
-        #print('likelihood', self.c_l)
 
     def calc_conditional(self):
+        print('prior', self.prior)
         self.c_c = np.matmul(self.transition, self.prior.T)
         print('conditional', self.c_c)
 
@@ -197,6 +219,8 @@ class Bayes(object):
                 self.list1 = self.listener1.transformPoint("/base_link", self.G1_msg)  # transform g1 to base_link (ROBOT FRAME) , returns x,y
                 self.list2 = self.listener2.transformPoint("/base_link", self.G2_msg)  # transform g2 to base_link (ROBOT FRAME) , returns x,y
                 self.list3 = self.listener3.transformPoint("/base_link", self.G3_msg)  # transform g3 to base_link (ROBOT FRAME) , returns x,y
+                # self.list4 = self.listener4.transformPoint("/base_link", self.G4_msg)  # transform g4 to base_link (ROBOT FRAME) , returns x,y
+                # self.list5 = self.listener5.transformPoint("/base_link", self.G5_msg)  #  transform g5 to base_link (ROBOT FRAME) , returns x,y
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 continue
             self.processed_goals()
