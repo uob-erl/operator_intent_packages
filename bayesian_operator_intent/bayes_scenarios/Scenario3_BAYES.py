@@ -368,19 +368,14 @@ def run():
 
     # 1st OBSERVATION -------------------------------------------------------------------------
                 # angles computation between robot (x=0, y=0) & each transformed goal (1st Observation)
-                robot_base = [0, 0]
-
-                # if n=3 ..
-                ind_pos_x = [0, 2, 4]
-                ind_pos_y = [1, 3, 5]
-
-
-                dx = new - robot_base[0]
-                dy = new - robot_base[1]
-                Dx = dx[ind_pos_x]
-                Dy = dx[ind_pos_y]
-                angle = np.arctan2(Dy, Dx) * 180 / np.pi
-                Angle = abs(angle)
+                xs = []
+                ys = []
+                it = iter(new)
+                [(xs.append(i), ys.append(next(it))) for i in it]
+                angles = np.arctan2(ys, xs) * 180 / np.pi
+                Angle = abs(angles)
+                print("Angles: ", Angle)
+                
 		term = 180 - abs(rot-Angle)
     # 1st OBSERVATION -------------------------------------------------------------------------
 
