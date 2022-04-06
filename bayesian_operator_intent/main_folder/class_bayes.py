@@ -61,7 +61,6 @@ class Bayes(object):
         # self.g5 = g5
         self.targets = [self.g1, self.g2, self.g3]
         # self.targets = [self.g1, self.g2, self.g3, self.g4, self.g5]
-        self.robot_base = [0, 0]
         self.robot_map = None
         self.wA = 0.6             # weighting factor for Angle
         self.wP = 0.4             # weighting factor for path
@@ -146,20 +145,16 @@ class Bayes(object):
     #     #print('euclidean', dis)
 
 # --------------------------------- O B S E R V A T I O N   S O U R C E S --------------------------------- #
-    def calc_angle(self):
-        # angles computation between robot (x=0, y=0) & each transformed goal
-        # if n=3 ..
-        ind_pos_x = [0, 2, 4]
-        ind_pos_y = [1, 3, 5]
-        # # if n=5 ..
-        # ind_pos_x = [0, 2, 4, 6, 8]
-        # ind_pos_y = [1, 3, 5, 7, 9]
-        dx = self.new - self.robot_base[0]
-        dy = self.new - self.robot_base[1]
-        Dx = dx[ind_pos_x]
-        Dy = dx[ind_pos_y]
-        angles = np.arctan2(Dy, Dx) * 180 / np.pi
+
+    def calc_angle(self): # assume that robot's base is always (0,0)
+        xs = []
+        ys = []
+        it = iter(self.new)
+        [(xs.append(i), ys.append(next(it))) for i in it]
+        angles = np.arctan2(ys, xs) * 180 / np.pi
         self.Angle = abs(angles)
+        print("Angles: ", self.Angle)
+
 
     def calc_path(self):
         self.length = np.array([])

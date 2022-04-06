@@ -132,19 +132,16 @@ def calculate_path():
     return length
 
 
-def calculate_angle():
-    # angles computation between robot (x=0, y=0) & each transformed goal
-
-    # if n=3 ..
-    ind_pos_x = [0, 2, 4]
-    ind_pos_y = [1, 3, 5]
-    dx = new - robot_base[0]
-    dy = new - robot_base[1]
-    Dx = dx[ind_pos_x]
-    Dy = dx[ind_pos_y]
-    angles = np.arctan2(Dy, Dx) * 180 / np.pi
+def calculate_angle(): # assume that robot's base is always (0,0)
+    xs = []
+    ys = []
+    it = iter(new)
+    [(xs.append(i), ys.append(next(it))) for i in it]
+    angles = np.arctan2(ys, xs) * 180 / np.pi
     Angle = abs(angles)
+    print("Angles: ", Angle)
     return Angle
+
 
 # BAYES: step 1   ~ take two observations into account (Angle & Path)
 def compute_likelihood():
@@ -187,7 +184,6 @@ if __name__=='__main__':
         x_robot, y_robot = 0, 0
         qx, qy, qz, qw = 0, 0, 0, 0
         path_length, index = 0, 0
-        robot_base = [0, 0]  # robot's coordinates in ROBOT FRAME
         wA = 0.6             # weighting factor for Angle
         wP = 0.4             # weighting factor for path
         maxA = 180           # max value the angle can take
