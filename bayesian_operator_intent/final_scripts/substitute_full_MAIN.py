@@ -13,7 +13,7 @@ import tf
 from tf import TransformListener
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 from scipy.spatial import distance
-from std_msgs.msg import Float32, Int8
+from std_msgs.msg import Float32, Int8, Bool
 from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped, PointStamped
 from geometry_msgs.msg import Pose, Point, Quaternion
 from nav_msgs.msg import Path
@@ -173,17 +173,33 @@ if __name__=='__main__':
     try:
         # --------------------------- ROS necessary stuff --------------------------- #
         rospy.init_node('test_fcn')
+        listener = listener0 = listener1 = listener2 = listener3 = tf.TransformListener()  # create tf.TransformListener objects
+
         robot_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, call_robot)
         nav_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, call_nav)
         get_plan = rospy.ServiceProxy('/move_base/GlobalPlanner/make_plan', GetPlan)
         sub = rospy.Subscriber('/move_base/GlobalPlanner/plan', Path, call_len)
+
+        global_area_pub = rospy.Publisher('isGLOBAL', Bool, queue_size = 1)
+        isA_pub = rospy.Publisher('isA', Bool, queue_size = 1)
+        isB_pub = rospy.Publisher('isB', Bool, queue_size = 1)
+        robot_coord_pub_X = rospy.Publisher('robot_coord_X', Float32, queue_size = 1)
+        robot_coord_pub_Y = rospy.Publisher('robot_coord_Y', Float32, queue_size = 1)
         intent_pub = rospy.Publisher('most_probable_goal', Int8, queue_size = 1)
         max_post_pub = rospy.Publisher('max_posterior', Float32, queue_size = 1)
-        listener = tf.TransformListener()  # create tf.TransformListener objects
-        listener0 = tf.TransformListener()
-        listener1 = tf.TransformListener()
-        listener2 = tf.TransformListener()
-        listener3 = tf.TransformListener()
+        posterior_0 = rospy.Publisher('posterior_0', Float32, queue_size = 1)
+        posterior_1 = rospy.Publisher('posterior_1', Float32, queue_size = 1)
+        posterior_2 = rospy.Publisher('posterior_2', Float32, queue_size = 1)
+        posterior_3 = rospy.Publisher('posterior_3', Float32, queue_size = 1)
+        angle0 = rospy.Publisher('angle0', Float32, queue_size = 1)
+        angle1 = rospy.Publisher('angle1', Float32, queue_size = 1)
+        angle2 = rospy.Publisher('angle2', Float32, queue_size = 1)
+        angle3 = rospy.Publisher('angle3', Float32, queue_size = 1)
+        path0 = rospy.Publisher('path0', Float32, queue_size = 1)
+        path1 = rospy.Publisher('path1', Float32, queue_size = 1)
+        path2 = rospy.Publisher('path2', Float32, queue_size = 1)
+        path3 = rospy.Publisher('path3', Float32, queue_size = 1)
+
 
         # --------------------------- Initialize parameters --------------------------- #
         area_START = [2.558259, -0.0879769]
@@ -218,6 +234,8 @@ if __name__=='__main__':
         while not done:
             start_time = time.time()
             robot_coord = [x_robot, y_robot]  # from amcl pose
+            robot_coord_pub_X.publish(x_robot)
+            robot_coord_pub_Y.publish(y_robot)
             operator_click = [x_nav, y_nav]   # from move base simple goal
             check_area_FINAL = distance.euclidean(operator_click, area_FINAL)
 
@@ -240,6 +258,8 @@ if __name__=='__main__':
                         start_time = time.time()
                         print("I have approached areaA --- local BOIR here")
                         robot_coord = [x_robot, y_robot]  # from amcl pose
+                        robot_coord_pub_X.publish(x_robot)
+                        robot_coord_pub_Y.publish(y_robot)
                         circle_area_A = checkInside(area_A_circle[0], area_A_circle[1], radiusA, robot_coord[0], robot_coord[1])
                         new = get_transformation(G0_msg, G1_msg, G2_msg, G3_msg)
                         path = calc_path(local_targets_areaA, robot_coord)
@@ -284,9 +304,24 @@ if __name__=='__main__':
                         #     max_post_pub.publish(max_post_avg)
 
                         print("most probable goal is: ", index+1)
+                        global_area_pub.publish(Bool(False))
+                        isA_pub.publish(Bool(True))
+                        isB_pub.publish(Bool(False))
+                        intent_pub.publish(index+1)
+                        path0.publish(path[0])
+                        path1.publish(path[1])
+                        path2.publish(path[2])
+                        path3.publish(path[3])
+                        angle0.publish(angle[0])
+                        angle1.publish(angle[1])
+                        angle2.publish(angle[2])
+                        angle3.publish(angle[3])
+                        posterior_0.publish(posterior[0])
+                        posterior_1.publish(posterior[1])
+                        posterior_2.publish(posterior[2])
+                        posterior_3.publish(posterior[3])
+
                         prior = posterior
-
-
                         cnt += 1
                         print("--- %s seconds ---" % (time.time() - start_time))
                         print('---------------------------------------------------------------------------')
@@ -306,6 +341,8 @@ if __name__=='__main__':
                         start_time = time.time()
                         print("I have approached areaB --- local BOIR here")
                         robot_coord = [x_robot, y_robot]  # from amcl pose
+                        robot_coord_pub_X.publish(x_robot)
+                        robot_coord_pub_Y.publish(y_robot)
                         circle_area_B = checkInside(area_B_circle[0], area_B_circle[1], radiusB, robot_coord[0], robot_coord[1])
                         new = get_transformation(G0_msg, G1_msg, G2_msg, G3_msg)
                         path = calc_path(local_targets_areaB, robot_coord)
@@ -351,8 +388,25 @@ if __name__=='__main__':
 
 
                         print("most probable goal is: ", index+1)
-                        prior = posterior
+                        global_area_pub.publish(Bool(False))
+                        isA_pub.publish(Bool(False))
+                        isB_pub.publish(Bool(True))
+                        intent_pub.publish(index+1)
+                        path0.publish(path[0])
+                        path1.publish(path[1])
+                        path2.publish(path[2])
+                        path3.publish(path[3])
+                        angle0.publish(angle[0])
+                        angle1.publish(angle[1])
+                        angle2.publish(angle[2])
+                        angle3.publish(angle[3])
+                        posterior_0.publish(posterior[0])
+                        posterior_1.publish(posterior[1])
+                        posterior_2.publish(posterior[2])
+                        posterior_3.publish(posterior[3])
 
+
+                        prior = posterior
                         cnt += 1
                         print("--- %s seconds ---" % (time.time() - start_time))
                         print('------------------------------------------------------------')
@@ -372,6 +426,8 @@ if __name__=='__main__':
                         start_time = time.time()
                         print("---GLOBAL BOIR should be running---")
                         robot_coord = [x_robot, y_robot]  # from amcl pose
+                        robot_coord_pub_X.publish(x_robot)
+                        robot_coord_pub_Y.publish(y_robot)
                         circle_area_A = checkInside(area_A_circle[0], area_A_circle[1], radiusA, robot_coord[0], robot_coord[1])
                         circle_area_B = checkInside(area_B_circle[0], area_B_circle[1], radiusB, robot_coord[0], robot_coord[1])
                         new = get_transformation(G0_msg, G1_msg, G2_msg, G3_msg)
@@ -420,8 +476,24 @@ if __name__=='__main__':
 
 
                         print("most probable goal is: ", index+1)
-                        prior = posterior
+                        global_area_pub.publish(Bool(True))
+                        isA_pub.publish(Bool(False))
+                        isB_pub.publish(Bool(False))
+                        intent_pub.publish(index+1)
+                        path0.publish(path[0])
+                        path1.publish(path[1])
+                        path2.publish(path[2])
+                        path3.publish(path[3])
+                        angle0.publish(angle[0])
+                        angle1.publish(angle[1])
+                        angle2.publish(angle[2])
+                        angle3.publish(angle[3])
+                        posterior_0.publish(posterior[0])
+                        posterior_1.publish(posterior[1])
+                        posterior_2.publish(posterior[2])
+                        posterior_3.publish(posterior[3])
 
+                        prior = posterior
                         cnt += 1
                         print("--- %s seconds ---" % (time.time() - start_time))
                         print('------------------------------------------------------------')
